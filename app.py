@@ -635,10 +635,10 @@ with tab3:
     if col_doc:
         df_sap = df_sap[df_sap[col_doc].astype(str).str.strip() == 'Nota Fiscal de Entrada']
 
-    # Identifica colunas
-    col_apagar  = next((c for c in ['A PAGAR A VENCER', 'A PAGAR A VE', 'A PAGAR'] if c in df_sap.columns), None)
-    col_forn    = next((c for c in ['FORNECEDOR', 'NOME FORNECEDOR'] if c in df_sap.columns), None)
-    col_vencido = next((c for c in ['A PAGAR VENCIDO - ATRASADO', 'A PAGAR VENCIDO'] if c in df_sap.columns), None)
+    # Identifica colunas — busca flexível por substring
+    col_apagar  = next((c for c in df_sap.columns if 'VENCER' in c), None)
+    col_forn    = next((c for c in df_sap.columns if c in ['FORNECEDOR', 'NOME FORNECEDOR']), None)
+    col_vencido = next((c for c in df_sap.columns if 'VENCIDO' in c or 'ATRASADO' in c), None)
 
     if not col_apagar or not col_forn:
         st.warning('Colunas "Fornecedor" ou "A Pagar" não encontradas na aba SAP _ABERTO.')
