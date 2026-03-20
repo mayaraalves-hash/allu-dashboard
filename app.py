@@ -23,192 +23,100 @@ CORES_GRAFICOS = ['#00C853', '#69F0AE', '#00E676', '#B9F6CA', '#1B5E20', '#43A04
 
 st.set_page_config(
     page_title='Dashboard Compras CAPEX | Allu',
-    page_icon='📦',
+    page_icon='allu',
     layout='wide',
     initial_sidebar_state='collapsed',
 )
 
 st.markdown(f"""
 <style>
-    /* esconde sidebar completamente */
     [data-testid="collapsedControl"] {{ display: none; }}
     section[data-testid="stSidebar"] {{ display: none; }}
-
-    .stApp {{ background-color: #F5F5F5; }}
+    .stApp {{ background-color: #F7F8FA; font-family: 'Inter', sans-serif; }}
 
     /* header */
     .main-header {{
         background: white;
-        border-left: 5px solid {COR_PRIMARIA};
-        padding: 18px 28px;
-        border-radius: 12px;
-        margin-bottom: 16px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
+        border-bottom: 2px solid {COR_PRIMARIA};
+        padding: 20px 28px 16px;
+        border-radius: 8px;
+        margin-bottom: 20px;
     }}
-    .main-header h1 {{ color: {COR_SECUNDARIA}; margin: 0; font-size: 24px; font-weight: 700; }}
-    .main-header p  {{ color: #888; margin: 4px 0 0; font-size: 12px; }}
+    .main-header h1 {{ color: #111; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }}
+    .main-header p  {{ color: #999; margin: 4px 0 0; font-size: 12px; }}
 
-    /* expander de filtros */
+    /* filtros */
     .stExpander {{
         background: white !important;
-        border: 1px solid #eee !important;
-        border-radius: 10px !important;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
-        margin-bottom: 12px !important;
+        border: 1px solid #E8E8E8 !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
+        margin-bottom: 16px !important;
     }}
     .stExpander summary {{
         font-size: 13px !important;
-        font-weight: 600 !important;
-        color: #444 !important;
+        font-weight: 500 !important;
+        color: #555 !important;
         padding: 10px 16px !important;
     }}
 
-    /* multiselect — visual clean tipo dropdown */
+    /* multiselect */
     .stMultiSelect > div > div {{
-        background: #F8F8F8 !important;
+        background: white !important;
         border: 1px solid #E0E0E0 !important;
-        border-radius: 8px !important;
-        min-height: 38px !important;
-        padding: 2px 8px !important;
-        box-shadow: none !important;
-        cursor: pointer;
-    }}
-    .stMultiSelect > div > div:hover {{
-        border-color: {COR_PRIMARIA} !important;
-        background: #fff !important;
-    }}
-    .stMultiSelect > div > div:focus-within {{
-        border-color: {COR_PRIMARIA} !important;
-        box-shadow: 0 0 0 2px rgba(0,200,83,0.15) !important;
-        background: #fff !important;
-    }}
-    /* label do filtro */
-    .stMultiSelect label {{
-        font-size: 11px !important;
-        font-weight: 600 !important;
-        color: #888 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-        margin-bottom: 4px !important;
-    }}
-    /* tags selecionadas */
-    .stMultiSelect [data-baseweb="tag"] {{
-        background: {COR_PRIMARIA} !important;
-        color: white !important;
         border-radius: 6px !important;
-        font-size: 11px !important;
-        padding: 2px 6px !important;
-        height: 22px !important;
+        min-height: 36px !important;
+        box-shadow: none !important;
     }}
-    /* placeholder */
-    .stMultiSelect input::placeholder {{
-        color: #999 !important;
-        font-size: 13px !important;
-    }}
+    .stMultiSelect > div > div:hover {{ border-color: {COR_PRIMARIA} !important; }}
+    .stMultiSelect > div > div:focus-within {{ border-color: {COR_PRIMARIA} !important; box-shadow: 0 0 0 2px rgba(0,200,83,0.12) !important; }}
+    .stMultiSelect label {{ font-size: 11px !important; font-weight: 600 !important; color: #999 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }}
+    .stMultiSelect [data-baseweb="tag"] {{ background: {COR_PRIMARIA} !important; color: white !important; border-radius: 4px !important; font-size: 11px !important; }}
+    .stMultiSelect input::placeholder {{ color: #bbb !important; font-size: 13px !important; }}
 
-    /* cards KPI */
+    /* date input */
+    .stDateInput label {{ font-size: 11px !important; font-weight: 600 !important; color: #999 !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; }}
+    .stDateInput > div > div {{ border: 1px solid #E0E0E0 !important; border-radius: 6px !important; background: white !important; }}
+    .stDateInput > div > div:focus-within {{ border-color: {COR_PRIMARIA} !important; }}
+
+    /* KPI cards */
     [data-testid="metric-container"] {{
         background: white;
-        border-top: 3px solid {COR_PRIMARIA};
-        border-radius: 10px;
+        border-radius: 8px;
         padding: 16px !important;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        border: 1px solid #F0F0F0;
+        border-top: 2px solid {COR_PRIMARIA};
     }}
-    [data-testid="metric-container"] label {{ color: #888; font-size: 12px; }}
-    [data-testid="metric-container"] [data-testid="stMetricValue"] {{
-        color: {COR_SECUNDARIA};
-        font-weight: 700;
-        font-size: 20px;
-    }}
+    [data-testid="metric-container"] label {{ color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }}
+    [data-testid="metric-container"] [data-testid="stMetricValue"] {{ color: #111; font-weight: 700; font-size: 22px; }}
 
-    /* cards de produto */
+    /* produto cards */
     .produto-card {{
         background: white;
-        border-radius: 10px;
+        border-radius: 8px;
         padding: 14px 16px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        border-top: 3px solid {COR_PRIMARIA};
+        border: 1px solid #F0F0F0;
+        border-top: 2px solid {COR_PRIMARIA};
         height: 100%;
     }}
-    .produto-card .prod-nome {{
-        font-weight: 700;
-        font-size: 13px;
-        color: {COR_SECUNDARIA};
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }}
-    .produto-card .prod-forn {{
-        font-size: 11px;
-        color: #888;
-        margin-bottom: 8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }}
-    .produto-card .prod-qtd {{
-        font-size: 22px;
-        font-weight: 800;
-        color: {COR_PRIMARIA};
-        line-height: 1;
-    }}
-    .produto-card .prod-qtd-label {{
-        font-size: 11px;
-        color: #aaa;
-        margin-top: 2px;
-    }}
-    .produto-card .prod-valor {{
-        font-size: 12px;
-        color: #555;
-        margin-top: 6px;
-        font-weight: 600;
-    }}
+    .produto-card .prod-nome {{ font-weight: 600; font-size: 12px; color: #222; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .produto-card .prod-forn {{ font-size: 11px; color: #aaa; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+    .produto-card .prod-qtd {{ font-size: 24px; font-weight: 700; color: {COR_PRIMARIA}; line-height: 1; }}
+    .produto-card .prod-qtd-label {{ font-size: 11px; color: #bbb; margin-top: 2px; }}
+    .produto-card .prod-valor {{ font-size: 12px; color: #666; margin-top: 8px; }}
 
     /* abas */
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 4px;
-        border-bottom: 2px solid #eee;
-        background: white;
-        border-radius: 10px 10px 0 0;
-        padding: 0 12px;
-    }}
-    .stTabs [data-baseweb="tab"] {{
-        font-weight: 600;
-        font-size: 15px;
-        padding: 12px 20px;
-        color: #888;
-    }}
-    .stTabs [aria-selected="true"] {{
-        color: {COR_PRIMARIA} !important;
-        border-bottom: 3px solid {COR_PRIMARIA} !important;
-        background: transparent !important;
-    }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 0; border-bottom: 1px solid #eee; background: white; border-radius: 8px 8px 0 0; padding: 0 16px; }}
+    .stTabs [data-baseweb="tab"] {{ font-weight: 500; font-size: 14px; padding: 12px 16px; color: #999; border-bottom: 2px solid transparent; }}
+    .stTabs [aria-selected="true"] {{ color: #111 !important; border-bottom: 2px solid {COR_PRIMARIA} !important; background: transparent !important; font-weight: 600 !important; }}
 
     /* botão */
-    div.stButton > button {{
-        background: {COR_PRIMARIA};
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        padding: 8px 20px;
-        width: 100%;
-    }}
+    div.stButton > button {{ background: {COR_PRIMARIA}; color: white; border: none; border-radius: 6px; font-weight: 600; font-size: 13px; padding: 8px 18px; width: 100%; }}
     div.stButton > button:hover {{ background: #00A846; color: white; }}
 
-    /* tabela */
-    .stDataFrame {{ border-radius: 10px; overflow: hidden; background: white; }}
-    hr {{ border-color: #eee; }}
-
-    /* multiselect tags */
-    .stMultiSelect [data-baseweb="tag"] {{
-        background: {COR_PRIMARIA} !important;
-        color: white !important;
-    }}
+    /* tabela e divisores */
+    .stDataFrame {{ border-radius: 8px; overflow: hidden; border: 1px solid #F0F0F0; }}
+    hr {{ border-color: #F0F0F0; margin: 16px 0; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -331,7 +239,7 @@ with col_titulo:
     """, unsafe_allow_html=True)
 with col_btn:
     st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
-    if st.button('🔄 Atualizar'):
+    if st.button('Atualizar'):
         st.cache_data.clear()
         st.rerun()
 
@@ -340,7 +248,7 @@ with col_btn:
 try:
     df = load_data()
 except Exception as e:
-    st.error(f'❌ Erro ao carregar dados: {e}')
+    st.error(f'Erro ao carregar dados: {e}')
     st.stop()
 
 if df.empty:
@@ -349,7 +257,7 @@ if df.empty:
 
 # ─── FILTROS (lista suspensa — vazio = todos) ─────────────────────────────────
 
-with st.expander('🔍 Filtros', expanded=False):
+with st.expander('Filtros', expanded=False):
     st.caption('Deixe em branco para considerar todos. Selecione para filtrar.')
 
     # Linha 1: período com calendário
@@ -400,7 +308,7 @@ if fp_sel:
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3 = st.tabs(['📊 Visão Geral', '🚚 Logística', '💳 Créditos em Aberto'])
+tab1, tab2, tab3 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto'])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — VISÃO GERAL
@@ -417,11 +325,11 @@ with tab1:
     n_pedidos      = len(df_f)
 
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric('💰 Volume Total', fmt_brl(total_valor))
-    k2.metric('📦 Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
-    k3.metric('🏢 Fornecedores', n_fornecedores)
-    k4.metric('📋 Pedidos', n_pedidos)
-    k5.metric('⏱️ Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
+    k1.metric('Volume Total', fmt_brl(total_valor))
+    k2.metric('Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
+    k3.metric('Fornecedores', n_fornecedores)
+    k4.metric('Pedidos', n_pedidos)
+    k5.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
 
     st.markdown('<br>', unsafe_allow_html=True)
 
@@ -555,7 +463,7 @@ with tab1:
 
     # Lead time — somente itens recebidos
     if 'FORNECEDOR' in df_recebidos.columns and 'LEAD TIME' in df_recebidos.columns:
-        st.markdown('### ⏱️ Lead Time Médio por Fornecedor')
+        st.markdown('### Lead Time Médio por Fornecedor')
         lt_forn = (
             df_recebidos.groupby('FORNECEDOR')['LEAD TIME']
             .mean().dropna().round(1).reset_index()
@@ -576,7 +484,7 @@ with tab1:
 # ABA 2 — LOGÍSTICA
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.markdown('### 🚚 Produtos a Chegar')
+    st.markdown('### Produtos a Chegar')
 
     hoje = pd.Timestamp.today().normalize()
 
@@ -607,13 +515,13 @@ with tab2:
             pendentes['STATUS'] = pendentes.apply(status, axis=1)
 
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric('📋 Pedidos Pendentes', len(pendentes))
+        k1.metric('Pedidos Pendentes', len(pendentes))
         qtd_pendente = int(pendentes['QUANTIDADE COMPRADA'].sum()) if 'QUANTIDADE COMPRADA' in pendentes.columns else 0
-        k2.metric('📦 Ativos a Chegar', f'{qtd_pendente:,}'.replace(',', '.'))
+        k2.metric('Ativos a Chegar', f'{qtd_pendente:,}'.replace(',', '.'))
         atrasados = len(pendentes[pendentes.get('STATUS', pd.Series(dtype=str)) == '🔴 Atrasado']) if 'STATUS' in pendentes.columns else 0
-        k3.metric('🔴 Atrasados', atrasados)
+        k3.metric('Atrasados', atrasados)
         valor_pendente = pendentes['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in pendentes.columns else 0
-        k4.metric('💰 Valor em Trânsito', fmt_brl(valor_pendente))
+        k4.metric('Valor em Trânsito', fmt_brl(valor_pendente))
 
         st.divider()
 
@@ -698,12 +606,12 @@ with tab2:
 # ABA 3 — CRÉDITOS EM ABERTO
 # ══════════════════════════════════════════════════════════════════════════════
 with tab3:
-    st.markdown('### 💳 Créditos em Aberto por Fornecedor')
+    st.markdown('### Créditos em Aberto por Fornecedor')
 
     try:
         df_sap = load_sap_data()
     except Exception as e:
-        st.error(f'❌ Erro ao carregar aba SAP_ABERTO: {e}')
+        st.error(f'Erro ao carregar aba SAP_ABERTO: {e}')
         st.stop()
 
     # Filtra apenas Nota Fiscal de Entrada
@@ -763,10 +671,10 @@ with tab3:
         total_vencido    = creditos['Vencido (Atrasado)'].sum() if 'Vencido (Atrasado)' in creditos.columns else 0
 
         k1, k2, k3, k4 = st.columns(4)
-        k1.metric('💰 Total em Aberto', fmt_brl(total_consumido))
-        k2.metric('📋 Limite Total Aprovado', fmt_brl(total_aprovado))
-        k3.metric('✅ Saldo Total Disponível', fmt_brl(total_saldo))
-        k4.metric('🔴 Total Vencido', fmt_brl(total_vencido))
+        k1.metric('Total em Aberto', fmt_brl(total_consumido))
+        k2.metric('Limite Total Aprovado', fmt_brl(total_aprovado))
+        k3.metric('Saldo Total Disponível', fmt_brl(total_saldo))
+        k4.metric('Total Vencido', fmt_brl(total_vencido))
 
         st.divider()
 
