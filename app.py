@@ -218,7 +218,7 @@ def load_sap_data():
     else:
         creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
-    ws     = client.open_by_key(SHEET_ID).worksheet('SAP _ABERTO')
+    ws     = client.open_by_key(SHEET_ID).worksheet('SAP_ABERTO')
     df     = pd.DataFrame(ws.get_all_records())
     df.columns = [c.strip().upper() for c in df.columns]
     return df
@@ -626,7 +626,7 @@ with tab3:
     try:
         df_sap = load_sap_data()
     except Exception as e:
-        st.error(f'❌ Erro ao carregar aba SAP _ABERTO: {e}')
+        st.error(f'❌ Erro ao carregar aba SAP_ABERTO: {e}')
         st.stop()
 
     # Filtra apenas Nota Fiscal de Entrada
