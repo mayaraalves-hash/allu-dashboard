@@ -51,21 +51,62 @@ st.markdown(f"""
     .main-header h1 {{ color: {COR_SECUNDARIA}; margin: 0; font-size: 24px; font-weight: 700; }}
     .main-header p  {{ color: #888; margin: 4px 0 0; font-size: 12px; }}
 
-    /* bloco de filtros */
-    .filter-bar {{
-        background: white;
-        border-radius: 12px;
-        padding: 14px 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin-bottom: 16px;
+    /* expander de filtros */
+    .stExpander {{
+        background: white !important;
+        border: 1px solid #eee !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
+        margin-bottom: 12px !important;
     }}
-    .filter-label {{
-        font-size: 11px;
-        font-weight: 600;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 4px;
+    .stExpander summary {{
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: #444 !important;
+        padding: 10px 16px !important;
+    }}
+
+    /* multiselect — visual clean tipo dropdown */
+    .stMultiSelect > div > div {{
+        background: #F8F8F8 !important;
+        border: 1px solid #E0E0E0 !important;
+        border-radius: 8px !important;
+        min-height: 38px !important;
+        padding: 2px 8px !important;
+        box-shadow: none !important;
+        cursor: pointer;
+    }}
+    .stMultiSelect > div > div:hover {{
+        border-color: {COR_PRIMARIA} !important;
+        background: #fff !important;
+    }}
+    .stMultiSelect > div > div:focus-within {{
+        border-color: {COR_PRIMARIA} !important;
+        box-shadow: 0 0 0 2px rgba(0,200,83,0.15) !important;
+        background: #fff !important;
+    }}
+    /* label do filtro */
+    .stMultiSelect label {{
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        color: #888 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        margin-bottom: 4px !important;
+    }}
+    /* tags selecionadas */
+    .stMultiSelect [data-baseweb="tag"] {{
+        background: {COR_PRIMARIA} !important;
+        color: white !important;
+        border-radius: 6px !important;
+        font-size: 11px !important;
+        padding: 2px 6px !important;
+        height: 22px !important;
+    }}
+    /* placeholder */
+    .stMultiSelect input::placeholder {{
+        color: #999 !important;
+        font-size: 13px !important;
     }}
 
     /* cards KPI */
