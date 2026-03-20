@@ -613,17 +613,44 @@ with tab2:
 
         st.dataframe(df_show, use_container_width=True, hide_index=True)
 
-        if 'FORNECEDOR' in pendentes.columns:
-            pend_forn = pendentes['FORNECEDOR'].value_counts().reset_index()
-            pend_forn.columns = ['Fornecedor', 'Pedidos Pendentes']
-            fig_p = px.bar(
-                pend_forn, x='Fornecedor', y='Pedidos Pendentes',
-                title='Pedidos Pendentes por Fornecedor',
-                color_discrete_sequence=[COR_PRIMARIA],
+        # Gráfico: Qtd a chegar por Filial + Fornecedor
+        if 'FORNECEDOR' in pendentes.columns and 'FILIAL' in pendentes.columns and 'QUANTIDADE COMPRADA' in pendentes.columns:
+            graf_forn = (
+                pendentes.groupby(['FILIAL', 'FORNECEDOR'])['QUANTIDADE COMPRADA']
+                .sum().reset_index()
+                .sort_values('QUANTIDADE COMPRADA', ascending=False)
             )
-            fig_p.update_layout(height=320, plot_bgcolor='white', paper_bgcolor='white',
+            fig_p = px.bar(
+                graf_forn, x='FORNECEDOR', y='QUANTIDADE COMPRADA', color='FILIAL',
+                title='Qtd a Chegar por Fornecedor e Filial',
+                labels={'QUANTIDADE COMPRADA': 'Qtd', 'FORNECEDOR': '', 'FILIAL': 'Filial'},
+                color_discrete_sequence=CORES_GRAFICOS,
+            )
+            fig_p.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
                                 title_font_color=COR_SECUNDARIA)
             st.plotly_chart(fig_p, use_container_width=True)
+
+        # Gráfico: Qtd a chegar por Previsão de Entrega (linha do tempo)
+        if COL_PREVISAO and 'QUANTIDADE COMPRADA' in pendentes.columns:
+            graf_prev = (
+                pendentes[pendentes[COL_PREVISAO].notna()]
+                .copy()
+            )
+            graf_prev['Previsão'] = graf_prev[COL_PREVISAO].dt.strftime('%d/%m/%Y')
+            graf_prev = (
+                graf_prev.groupby(['Previsão', COL_PREVISAO])['QUANTIDADE COMPRADA']
+                .sum().reset_index()
+                .sort_values(COL_PREVISAO)
+            )
+            fig_prev = px.bar(
+                graf_prev, x='Previsão', y='QUANTIDADE COMPRADA',
+                title='Qtd a Chegar por Previsão de Entrega',
+                labels={'QUANTIDADE COMPRADA': 'Qtd', 'Previsão': ''},
+                color_discrete_sequence=[COR_ACENTO],
+            )
+            fig_prev.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
+                                   title_font_color=COR_SECUNDARIA)
+            st.plotly_chart(fig_prev, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 3 — CRÉDITOS EM ABERTO
