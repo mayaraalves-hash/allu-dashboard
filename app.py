@@ -510,7 +510,10 @@ with tab2:
     if 'DATA DE RECEBIMENTO' not in df_f.columns:
         st.info('Coluna "DATA DE RECEBIMENTO" não encontrada na planilha.')
     else:
-        pendentes = df_f[df_f['DATA DE RECEBIMENTO'].isna()].copy()
+        # Pendentes = quantidade recebida vazia ou zero
+        pendentes = df_f[
+            df_f['QUANTIDADE RECEBIDA'].isna() | (df_f['QUANTIDADE RECEBIDA'] == 0)
+        ].copy() if 'QUANTIDADE RECEBIDA' in df_f.columns else df_f[df_f['DATA DE RECEBIMENTO'].isna()].copy()
 
         # Lead time médio: apenas itens recebidos do histórico completo
         df_hist_recebidos = df[df['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df.columns else df
