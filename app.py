@@ -220,8 +220,17 @@ def load_sap_data():
         creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
     ws     = client.open_by_key(SHEET_ID).worksheet('SAP_ABERTO')
-    df     = pd.DataFrame(ws.get_all_records())
-    df.columns = [c.strip().upper() for c in df.columns]
+
+    # Lê com valores brutos (sem formatação) para garantir números corretos
+    raw = ws.get_all_values()
+    if not raw:
+        return pd.DataFrame()
+    headers = [h.strip().upper() for h in raw[0]]
+    df = pd.DataFrame(raw[1:], columns=headers)
+
+    # Converte colunas numéricas: remove R$, pontos de milhar, troca vírgula por ponto
+    for col in df.columns:
+        df[col] = df[col].astype(str).str.strip()
     return df
 
 
@@ -643,10 +652,19 @@ with tab3:
     if not col_apagar or not col_forn:
         st.warning('Colunas "Fornecedor" ou "A Pagar" não encontradas na aba SAP _ABERTO.')
     else:
-        # Parse valores
-        df_sap[col_apagar] = df_sap[col_apagar].apply(parse_currency)
+        # Parse valores numéricos (formato brasileiro: 1.234,56)
+        def parse_br(val):
+            if val is None or str(val).strip() in ('', '-', '0'):
+                return 0.0
+            s = str(val).strip().replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
+            try:
+                return float(s)
+            except Exception:
+                return 0.0
+
+        df_sap[col_apagar] = df_sap[col_apagar].apply(parse_br)
         if col_vencido:
-            df_sap[col_vencido] = df_sap[col_vencido].apply(parse_currency)
+            df_sap[col_vencido] = df_sap[col_vencido].apply(parse_br)
 
         # Agrupa por fornecedor
         agg = {col_apagar: 'sum'}
