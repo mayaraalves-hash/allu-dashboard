@@ -201,6 +201,29 @@ def fmt_brl(valor):
 
 # ─── DADOS ────────────────────────────────────────────────────────────────────
 
+# Limites aprovados por fornecedor (nome exato conforme aparece na aba SAP_ABERTO)
+LIMITES = {
+    'GLOBAL DISTRIBUCAO DE BENS DE CONS LTDA': 6_000_000,   # iPlace
+    'FAST SHOP S.A.':                           3_500_000,   # Fast Shop
+    'ALLIED TECNOLOGIA S.A.':                     500_000,   # Allied
+}
+
+
+@st.cache_data(ttl=300)
+def load_sap_data():
+    if 'gcp_service_account' in st.secrets:
+        creds = Credentials.from_service_account_info(
+            dict(st.secrets['gcp_service_account']), scopes=SCOPES
+        )
+    else:
+        creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    ws     = client.open_by_key(SHEET_ID).worksheet('SAP _ABERTO')
+    df     = pd.DataFrame(ws.get_all_records())
+    df.columns = [c.strip().upper() for c in df.columns]
+    return df
+
+
 @st.cache_data(ttl=300)
 def load_data():
     # No Streamlit Cloud lê das secrets; localmente lê do arquivo
@@ -327,7 +350,7 @@ if fp_sel:
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2 = st.tabs(['📊 Visão Geral', '🚚 Logística'])
+tab1, tab2, tab3 = st.tabs(['📊 Visão Geral', '🚚 Logística', '💳 Créditos em Aberto'])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — VISÃO GERAL
@@ -593,3 +616,103 @@ with tab2:
             fig_p.update_layout(height=320, plot_bgcolor='white', paper_bgcolor='white',
                                 title_font_color=COR_SECUNDARIA)
             st.plotly_chart(fig_p, use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 3 — CRÉDITOS EM ABERTO
+# ══════════════════════════════════════════════════════════════════════════════
+with tab3:
+    st.markdown('### 💳 Créditos em Aberto por Fornecedor')
+
+    try:
+        df_sap = load_sap_data()
+    except Exception as e:
+        st.error(f'❌ Erro ao carregar aba SAP _ABERTO: {e}')
+        st.stop()
+
+    # Filtra apenas Nota Fiscal de Entrada
+    col_doc = next((c for c in ['DOCUMENTO', 'TIPO', 'TIPO DE DOCUMENTO'] if c in df_sap.columns), None)
+    if col_doc:
+        df_sap = df_sap[df_sap[col_doc].astype(str).str.strip() == 'Nota Fiscal de Entrada']
+
+    # Identifica coluna "A Pagar"
+    col_apagar = next((c for c in ['A PAGAR', 'A PAGAR '] if c in df_sap.columns), None)
+    col_forn   = next((c for c in ['FORNECEDOR', 'NOME FORNECEDOR'] if c in df_sap.columns), None)
+    col_vencido = next((c for c in ['A PAGAR VENCIDO - ATRASADO', 'A PAGAR VENCIDO'] if c in df_sap.columns), None)
+
+    if not col_apagar or not col_forn:
+        st.warning('Colunas "Fornecedor" ou "A Pagar" não encontradas na aba SAP _ABERTO.')
+    else:
+        # Parse valores
+        df_sap[col_apagar] = df_sap[col_apagar].apply(parse_currency)
+        if col_vencido:
+            df_sap[col_vencido] = df_sap[col_vencido].apply(parse_currency)
+
+        # Agrupa por fornecedor
+        agg = {col_apagar: 'sum'}
+        if col_vencido:
+            agg[col_vencido] = 'sum'
+        creditos = df_sap.groupby(col_forn).agg(agg).reset_index()
+        creditos.columns = ['Fornecedor', 'Limite Consumido'] + (['Vencido (Atrasado)'] if col_vencido else [])
+        creditos = creditos[creditos['Limite Consumido'] > 0].sort_values('Limite Consumido', ascending=False)
+
+        # Adiciona limites aprovados e calcula saldo
+        creditos['Limite Aprovado'] = creditos['Fornecedor'].map(LIMITES)
+        creditos['Saldo Disponível'] = creditos.apply(
+            lambda r: r['Limite Aprovado'] - r['Limite Consumido']
+            if pd.notna(r['Limite Aprovado']) else None, axis=1
+        )
+
+        # ── KPIs ──────────────────────────────────────────────────────────────
+        total_consumido  = creditos['Limite Consumido'].sum()
+        total_aprovado   = creditos['Limite Aprovado'].dropna().sum()
+        total_saldo      = creditos['Saldo Disponível'].dropna().sum()
+        total_vencido    = creditos['Vencido (Atrasado)'].sum() if 'Vencido (Atrasado)' in creditos.columns else 0
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric('💰 Total em Aberto', fmt_brl(total_consumido))
+        k2.metric('📋 Limite Total Aprovado', fmt_brl(total_aprovado))
+        k3.metric('✅ Saldo Total Disponível', fmt_brl(total_saldo))
+        k4.metric('🔴 Total Vencido', fmt_brl(total_vencido))
+
+        st.divider()
+
+        # ── Tabela ────────────────────────────────────────────────────────────
+        df_display = creditos.copy()
+        for col in ['Limite Consumido', 'Limite Aprovado', 'Saldo Disponível']:
+            if col in df_display.columns:
+                df_display[col] = df_display[col].apply(
+                    lambda x: fmt_brl(x) if pd.notna(x) and x != 0 else '-'
+                )
+        if 'Vencido (Atrasado)' in df_display.columns:
+            df_display['Vencido (Atrasado)'] = df_display['Vencido (Atrasado)'].apply(
+                lambda x: fmt_brl(x) if x > 0 else '-'
+            )
+
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+        # ── Gráfico: consumido vs aprovado ────────────────────────────────────
+        df_graf = creditos[creditos['Limite Aprovado'].notna()].copy()
+        if not df_graf.empty:
+            fig_c = go.Figure()
+            fig_c.add_trace(go.Bar(
+                name='Limite Consumido',
+                x=df_graf['Fornecedor'],
+                y=df_graf['Limite Consumido'],
+                marker_color=COR_PRIMARIA,
+            ))
+            fig_c.add_trace(go.Bar(
+                name='Saldo Disponível',
+                x=df_graf['Fornecedor'],
+                y=df_graf['Saldo Disponível'],
+                marker_color='#E0E0E0',
+            ))
+            fig_c.update_layout(
+                barmode='stack',
+                title='Limite Aprovado vs Consumido',
+                height=350,
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                title_font_color=COR_SECUNDARIA,
+                legend=dict(orientation='h', yanchor='bottom', y=1.02),
+            )
+            st.plotly_chart(fig_c, use_container_width=True)
