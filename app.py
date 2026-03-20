@@ -667,8 +667,9 @@ with tab2:
                 labels={'QUANTIDADE COMPRADA': 'Qtd', 'FORNECEDOR': '', 'FILIAL': 'Filial'},
                 color_discrete_sequence=CORES_GRAFICOS,
             )
+            fig_p.update_traces(texttemplate='%{y}', textposition='outside')
             fig_p.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                                title_font_color=COR_SECUNDARIA)
+                                title_font_color=COR_SECUNDARIA, uniformtext_minsize=10)
             st.plotly_chart(fig_p, use_container_width=True)
 
         # Gráfico: Qtd a chegar por Previsão de Entrega (linha do tempo)
@@ -688,8 +689,9 @@ with tab2:
                 labels={'QUANTIDADE COMPRADA': 'Qtd', 'Previsão': ''},
                 color_discrete_sequence=[COR_ACENTO],
             )
+            fig_prev.update_traces(texttemplate='%{y}', textposition='outside')
             fig_prev.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                                   title_font_color=COR_SECUNDARIA)
+                                   title_font_color=COR_SECUNDARIA, uniformtext_minsize=10)
             st.plotly_chart(fig_prev, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
