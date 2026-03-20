@@ -201,12 +201,11 @@ def fmt_brl(valor):
 
 # ─── DADOS ────────────────────────────────────────────────────────────────────
 
-# Limites aprovados por fornecedor (nome exato conforme aparece na aba SAP_ABERTO)
+# Limites aprovados — usar nomes normalizados (após agrupamento)
 LIMITES = {
-    'GLOBAL DISTRIBUICAO DE BENS DE CONS LTDA':  6_000_000,  # iPlace
-    'GLOBAL DISTRIBUCAO DE BENS DE CONS LTDA':   6_000_000,  # iPlace (variação)
-    'FAST SHOP S.A':                             2_500_000,  # Fast Shop
-    'FAST SHOP S.A.':                            2_500_000,  # Fast Shop (variação)
+    'GLOBAL DISTRIBUICAO (iPlace)': 6_000_000,
+    'FAST SHOP S.A':                2_500_000,
+    'FAST SHOP S.A.':               2_500_000,
 }
 
 
@@ -577,10 +576,9 @@ with tab2:
 
         st.divider()
 
-        # Tenta os dois nomes possíveis para a coluna de previsão de entrega
+        # Busca coluna de previsão por substring (ignora acentuação exata)
         COL_PREVISAO = next(
-            (c for c in ['PREVISÃO DE ENTREGA', 'PREVISÃO DE COMPRA', 'DATA PREVISTA']
-             if c in pendentes.columns),
+            (c for c in pendentes.columns if 'PREVIS' in c.upper()),
             None
         )
 
@@ -590,7 +588,7 @@ with tab2:
         ]
         if COL_PREVISAO:
             COLS_LOG.append(COL_PREVISAO)
-        COLS_LOG += ['QUANTIDADE COMPRADA', 'PREÇO TOTAL', 'LEAD TIME MÉDIO (dias)', 'FORMA DE PAGAMENTO']
+        COLS_LOG += ['QUANTIDADE COMPRADA', 'LEAD TIME MÉDIO (dias)']
 
         cols_show = [c for c in COLS_LOG if c in pendentes.columns]
         df_show   = pendentes[cols_show].copy()
@@ -665,6 +663,14 @@ with tab3:
         df_sap[col_apagar] = df_sap[col_apagar].apply(parse_br)
         if col_vencido:
             df_sap[col_vencido] = df_sap[col_vencido].apply(parse_br)
+
+        # Normaliza nomes — agrupa todas as variações da Global em um único nome
+        def normalizar_forn(nome):
+            n = str(nome).upper()
+            if 'GLOBAL DISTRIBUI' in n or 'GLOBAL DISTRIBU' in n:
+                return 'GLOBAL DISTRIBUICAO (iPlace)'
+            return nome
+        df_sap[col_forn] = df_sap[col_forn].apply(normalizar_forn)
 
         # Agrupa por fornecedor
         agg = {col_apagar: 'sum'}
