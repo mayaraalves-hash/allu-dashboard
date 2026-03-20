@@ -632,10 +632,9 @@ with tab2:
 
         # Gráfico: Qtd a chegar por Previsão de Entrega (linha do tempo)
         if COL_PREVISAO and 'QUANTIDADE COMPRADA' in pendentes.columns:
-            graf_prev = (
-                pendentes[pendentes[COL_PREVISAO].notna()]
-                .copy()
-            )
+            graf_prev = pendentes.copy()
+            graf_prev[COL_PREVISAO] = pd.to_datetime(graf_prev[COL_PREVISAO], dayfirst=True, errors='coerce')
+            graf_prev = graf_prev[graf_prev[COL_PREVISAO].notna()]
             graf_prev['Previsão'] = graf_prev[COL_PREVISAO].dt.strftime('%d/%m/%Y')
             graf_prev = (
                 graf_prev.groupby(['Previsão', COL_PREVISAO])['QUANTIDADE COMPRADA']
