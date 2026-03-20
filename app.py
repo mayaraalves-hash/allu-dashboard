@@ -203,9 +203,10 @@ def fmt_brl(valor):
 
 # Limites aprovados por fornecedor (nome exato conforme aparece na aba SAP_ABERTO)
 LIMITES = {
-    'GLOBAL DISTRIBUCAO DE BENS DE CONS LTDA': 6_000_000,   # iPlace
-    'FAST SHOP S.A.':                           3_500_000,   # Fast Shop
-    'ALLIED TECNOLOGIA S.A.':                     500_000,   # Allied
+    'GLOBAL DISTRIBUICAO DE BENS DE CONS LTDA':  6_000_000,  # iPlace
+    'GLOBAL DISTRIBUCAO DE BENS DE CONS LTDA':   6_000_000,  # iPlace (variação)
+    'FAST SHOP S.A':                             2_500_000,  # Fast Shop
+    'FAST SHOP S.A.':                            2_500_000,  # Fast Shop (variação)
 }
 
 
@@ -634,9 +635,9 @@ with tab3:
     if col_doc:
         df_sap = df_sap[df_sap[col_doc].astype(str).str.strip() == 'Nota Fiscal de Entrada']
 
-    # Identifica coluna "A Pagar"
-    col_apagar = next((c for c in ['A PAGAR', 'A PAGAR '] if c in df_sap.columns), None)
-    col_forn   = next((c for c in ['FORNECEDOR', 'NOME FORNECEDOR'] if c in df_sap.columns), None)
+    # Identifica colunas
+    col_apagar  = next((c for c in ['A PAGAR A VENCER', 'A PAGAR A VE', 'A PAGAR'] if c in df_sap.columns), None)
+    col_forn    = next((c for c in ['FORNECEDOR', 'NOME FORNECEDOR'] if c in df_sap.columns), None)
     col_vencido = next((c for c in ['A PAGAR VENCIDO - ATRASADO', 'A PAGAR VENCIDO'] if c in df_sap.columns), None)
 
     if not col_apagar or not col_forn:
