@@ -278,26 +278,44 @@ if df.empty:
 
 with st.expander('🔍 Filtros', expanded=False):
     st.caption('Deixe em branco para considerar todos. Selecione para filtrar.')
+
+    # Linha 1: período com calendário
+    fd1, fd2 = st.columns(2)
+    data_min = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
+    data_max = df['DATA DA COMPRA'].max().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
+    with fd1:
+        data_inicio = st.date_input('Data início', value=data_min, min_value=data_min, max_value=data_max, key='f_data_ini', format='DD/MM/YYYY')
+    with fd2:
+        data_fim = st.date_input('Data fim', value=data_max, min_value=data_min, max_value=data_max, key='f_data_fim', format='DD/MM/YYYY')
+
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+
+    # Linha 2: demais filtros
     fc1, fc2, fc3, fc4 = st.columns(4)
 
-    anos = sorted(df['ANO'].dropna().unique().astype(int).tolist(), reverse=True) if 'ANO' in df.columns else []
-    with fc1:
-        ano_sel = st.multiselect('Ano', anos, default=[], placeholder='Todos', key='f_ano')
-
     fornecedores = sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else []
-    with fc2:
+    with fc1:
         forn_sel = st.multiselect('Fornecedor', fornecedores, default=[], placeholder='Todos', key='f_forn')
 
     filiais = sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else []
-    with fc3:
+    with fc2:
         filial_sel = st.multiselect('Filial', filiais, default=[], placeholder='Todos', key='f_filial')
 
     formas_pag = sorted(df['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df.columns else []
-    with fc4:
+    with fc3:
         fp_sel = st.multiselect('Forma de Pagamento', formas_pag, default=[], placeholder='Todos', key='f_fp')
+
+    anos = sorted(df['ANO'].dropna().unique().astype(int).tolist(), reverse=True) if 'ANO' in df.columns else []
+    with fc4:
+        ano_sel = st.multiselect('Ano', anos, default=[], placeholder='Todos', key='f_ano')
 
 # Aplicar filtros — lista vazia significa "sem filtro" (mostra tudo)
 df_f = df.copy()
+if 'DATA DA COMPRA' in df_f.columns and data_min and data_max:
+    df_f = df_f[
+        (df_f['DATA DA COMPRA'].dt.date >= data_inicio) &
+        (df_f['DATA DA COMPRA'].dt.date <= data_fim)
+    ]
 if ano_sel:
     df_f = df_f[df_f['ANO'].isin(ano_sel)]
 if forn_sel:
