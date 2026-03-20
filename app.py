@@ -215,6 +215,11 @@ def load_data():
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], dayfirst=True, errors='coerce')
 
+    # Converte coluna de previsão independente do nome exato
+    col_prev = next((c for c in df.columns if 'PREVIS' in c.upper()), None)
+    if col_prev and col_prev not in ['DATA DA COMPRA', 'DATA DE RECEBIMENTO', 'PREVISÃO DE COMPRA']:
+        df[col_prev] = pd.to_datetime(df[col_prev], dayfirst=True, errors='coerce')
+
     if 'DATA DA COMPRA' in df.columns:
         df['ANO']     = df['DATA DA COMPRA'].dt.year
         df['ANO_MES'] = df['DATA DA COMPRA'].dt.to_period('M').astype(str)
@@ -506,19 +511,27 @@ with tab2:
             lt_medio.columns = ['FORNECEDOR', 'LEAD TIME MÉDIO (dias)']
             pendentes = pendentes.merge(lt_medio, on='FORNECEDOR', how='left')
 
-        if 'PREVISÃO DE COMPRA' in pendentes.columns:
+        # Busca coluna de previsão por substring (ignora nome exato)
+        COL_PREVISAO_STATUS = next(
+            (c for c in pendentes.columns if 'PREVIS' in c.upper()),
+            None
+        )
+        if COL_PREVISAO_STATUS:
+            pendentes[COL_PREVISAO_STATUS] = pd.to_datetime(
+                pendentes[COL_PREVISAO_STATUS], dayfirst=True, errors='coerce'
+            )
             def status(row):
-                prev = row.get('PREVISÃO DE COMPRA')
-                if pd.isna(prev):
-                    return '🟡 Sem previsão'
-                return '🔴 Atrasado' if prev < hoje else '🟢 No prazo'
+                prev = row.get(COL_PREVISAO_STATUS)
+                if pd.isnull(prev):
+                    return 'Sem previsão'
+                return 'Atrasado' if prev < hoje else 'No prazo'
             pendentes['STATUS'] = pendentes.apply(status, axis=1)
 
         k1, k2, k3, k4 = st.columns(4)
         k1.metric('Pedidos Pendentes', len(pendentes))
         qtd_pendente = int(pendentes['QUANTIDADE COMPRADA'].sum()) if 'QUANTIDADE COMPRADA' in pendentes.columns else 0
         k2.metric('Ativos a Chegar', f'{qtd_pendente:,}'.replace(',', '.'))
-        atrasados = len(pendentes[pendentes.get('STATUS', pd.Series(dtype=str)) == '🔴 Atrasado']) if 'STATUS' in pendentes.columns else 0
+        atrasados = int((pendentes['STATUS'] == 'Atrasado').sum()) if 'STATUS' in pendentes.columns else 0
         k3.metric('Atrasados', atrasados)
         valor_pendente = pendentes['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in pendentes.columns else 0
         k4.metric('Valor em Trânsito', fmt_brl(valor_pendente))
@@ -557,8 +570,11 @@ with tab2:
                 lambda x: fmt_brl(x) if isinstance(x, float) else '-'
             )
 
+        # Ordena: Atrasado primeiro, depois No prazo, Sem previsão por último
         if 'STATUS' in df_show.columns:
-            df_show = df_show.sort_values('STATUS')
+            ordem = {'Atrasado': 0, 'No prazo': 1, 'Sem previsão': 2}
+            df_show['_ord'] = df_show['STATUS'].map(ordem).fillna(3)
+            df_show = df_show.sort_values('_ord').drop(columns=['_ord'])
 
         st.dataframe(df_show, use_container_width=True, hide_index=True)
 
