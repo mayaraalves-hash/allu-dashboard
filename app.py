@@ -527,14 +527,17 @@ with tab2:
                 return 'Atrasado' if prev < hoje else 'No prazo'
             pendentes['STATUS'] = pendentes.apply(status, axis=1)
 
-        k1, k2, k3, k4 = st.columns(4)
+        k1, k2, k3, k4, k5 = st.columns(5)
         k1.metric('Pedidos Pendentes', len(pendentes))
         qtd_pendente = int(pendentes['QUANTIDADE COMPRADA'].sum()) if 'QUANTIDADE COMPRADA' in pendentes.columns else 0
         k2.metric('Ativos a Chegar', f'{qtd_pendente:,}'.replace(',', '.'))
         atrasados = int((pendentes['STATUS'] == 'Atrasado').sum()) if 'STATUS' in pendentes.columns else 0
-        k3.metric('Atrasados', atrasados)
+        k3.metric('Pedidos Atrasados', atrasados)
+        df_atrasados = pendentes[pendentes['STATUS'] == 'Atrasado'] if 'STATUS' in pendentes.columns else pd.DataFrame()
+        qtd_atrasada = int(df_atrasados['QUANTIDADE COMPRADA'].sum()) if 'QUANTIDADE COMPRADA' in df_atrasados.columns and not df_atrasados.empty else 0
+        k4.metric('Ativos Atrasados', f'{qtd_atrasada:,}'.replace(',', '.'))
         valor_pendente = pendentes['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in pendentes.columns else 0
-        k4.metric('Valor em Trânsito', fmt_brl(valor_pendente))
+        k5.metric('Valor em Trânsito', fmt_brl(valor_pendente))
 
         st.divider()
 
