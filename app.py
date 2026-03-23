@@ -475,10 +475,11 @@ with tab1:
         if recebidos_prod.empty:
             st.info('Nenhum item recebido no período selecionado.')
         else:
-            render_cards(recebidos_prod.head(4))
-            if len(recebidos_prod) > 4:
-                st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-                render_cards(recebidos_prod.iloc[4:8])
+            for chunk_start in range(0, len(recebidos_prod), 4):
+                chunk = recebidos_prod.iloc[chunk_start:chunk_start + 4]
+                render_cards(chunk)
+                if chunk_start + 4 < len(recebidos_prod):
+                    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 
     st.markdown('<br>', unsafe_allow_html=True)
 
