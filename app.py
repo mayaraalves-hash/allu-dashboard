@@ -414,13 +414,20 @@ with tab1:
             lambda r: buscar_ticket_vg(r['PRODUTO']) * r[qtd_col], axis=1
         ).sum()
 
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    qtd_recebida = int(df_recebidos['QUANTIDADE RECEBIDA'].sum()) if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 0
+    qtd_pendente = int(total_qtd) - qtd_recebida
+
+    k1, k2, k3, k4 = st.columns(4)
     k1.metric('Volume Total', fmt_brl(total_valor))
     k2.metric('Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
-    k3.metric('Fornecedores', n_fornecedores)
-    k4.metric('Pedidos', n_pedidos)
-    k5.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
-    k6.metric('MRR Gerado', fmt_brl(mrr_gerado))
+    k3.metric('Qtd Recebida', f'{qtd_recebida:,}'.replace(',', '.'))
+    k4.metric('Qtd Pendente', f'{qtd_pendente:,}'.replace(',', '.'))
+
+    k5, k6, k7, k8 = st.columns(4)
+    k5.metric('Fornecedores', n_fornecedores)
+    k6.metric('Pedidos', n_pedidos)
+    k7.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
+    k8.metric('MRR Gerado', fmt_brl(mrr_gerado))
 
     st.markdown('<br>', unsafe_allow_html=True)
 
