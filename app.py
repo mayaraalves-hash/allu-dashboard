@@ -192,8 +192,16 @@ def load_mrr_data():
         )
     else:
         creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    ws  = client.open_by_key(SHEET_ID).worksheet('MRR')
+    client    = gspread.authorize(creds)
+    planilha  = client.open_by_key(SHEET_ID)
+    # Busca a aba MRR ignorando maiúsculas/minúsculas e espaços extras
+    ws = next(
+        (s for s in planilha.worksheets() if s.title.strip().upper() == 'MRR'),
+        None
+    )
+    if ws is None:
+        nomes = [s.title for s in planilha.worksheets()]
+        raise ValueError(f'Aba MRR não encontrada. Abas disponíveis: {nomes}')
     raw = ws.get_all_values()
     if not raw:
         return pd.DataFrame()
