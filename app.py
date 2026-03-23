@@ -572,22 +572,39 @@ with tab2:
             pendentes['STATUS'] = pendentes.apply(status, axis=1)
 
         # ── Cruzamento com MRR ───────────────────────────────────────────────
+        df_mrr = pd.DataFrame()
+        mrr_erro = None
         try:
             df_mrr = load_mrr_data()
-        except Exception:
-            df_mrr = pd.DataFrame()
+        except Exception as e:
+            mrr_erro = str(e)
+
+        if mrr_erro:
+            st.warning(f'MRR: {mrr_erro}')
 
         if not df_mrr.empty and 'produto' in df_mrr.columns and 'PRODUTO' in pendentes.columns:
+            # Normaliza nomes da aba MRR para comparação
             mrr_produtos = df_mrr['produto'].tolist()
-            pendentes['_prod_match'] = pendentes['PRODUTO'].apply(
-                lambda p: match_mrr(p, mrr_produtos)
-            )
             mrr_map = df_mrr.set_index('produto')['valor_mensal'].to_dict()
+
+            def buscar_ticket(nome_capex):
+                norm = _normalizar(nome_capex)
+                # 1. Tenta match exato normalizado
+                for p in mrr_produtos:
+                    if _normalizar(p) == norm:
+                        return p
+                # 2. Tenta match aproximado com cutoff 0.5
+                norm_lista = [_normalizar(p) for p in mrr_produtos]
+                matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
+                if matches:
+                    return mrr_produtos[norm_lista.index(matches[0])]
+                return None
+
+            pendentes['_prod_match'] = pendentes['PRODUTO'].apply(buscar_ticket)
             pendentes['TICKET MÉDIO'] = pendentes['_prod_match'].map(mrr_map)
             pendentes['MRR PREVISTO'] = pendentes.apply(
                 lambda r: r['TICKET MÉDIO'] * r['QUANTIDADE COMPRADA']
-                if pd.notna(r['TICKET MÉDIO']) and 'QUANTIDADE COMPRADA' in pendentes.columns
-                else None, axis=1
+                if pd.notna(r.get('TICKET MÉDIO')) else None, axis=1
             )
             pendentes.drop(columns=['_prod_match'], inplace=True)
 
