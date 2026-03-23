@@ -321,10 +321,16 @@ with st.expander('Filtros', expanded=False):
     fd1, fd2 = st.columns(2)
     data_min = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
     data_max = df['DATA DA COMPRA'].max().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
+    # Padrão: primeiro e último dia do mês atual
+    hoje_date = pd.Timestamp.today().date()
+    mes_inicio = hoje_date.replace(day=1)
+    mes_fim    = hoje_date
+    default_ini = max(mes_inicio, data_min) if data_min else mes_inicio
+    default_fim = min(mes_fim, data_max)    if data_max else mes_fim
     with fd1:
-        data_inicio = st.date_input('Data início', value=data_min, min_value=data_min, max_value=data_max, key='f_data_ini', format='DD/MM/YYYY')
+        data_inicio = st.date_input('Data início', value=default_ini, min_value=data_min, max_value=data_max, key='f_data_ini', format='DD/MM/YYYY')
     with fd2:
-        data_fim = st.date_input('Data fim', value=data_max, min_value=data_min, max_value=data_max, key='f_data_fim', format='DD/MM/YYYY')
+        data_fim = st.date_input('Data fim', value=default_fim, min_value=data_min, max_value=data_max, key='f_data_fim', format='DD/MM/YYYY')
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
 
