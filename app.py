@@ -1,4 +1,6 @@
 import os
+import unicodedata
+import difflib
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -180,6 +182,48 @@ def load_sap_data():
     for col in df.columns:
         df[col] = df[col].astype(str).str.strip()
     return df
+
+
+@st.cache_data(ttl=300)
+def load_mrr_data():
+    if 'gcp_service_account' in st.secrets:
+        creds = Credentials.from_service_account_info(
+            dict(st.secrets['gcp_service_account']), scopes=SCOPES
+        )
+    else:
+        creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    ws  = client.open_by_key(SHEET_ID).worksheet('MRR')
+    raw = ws.get_all_values()
+    if not raw:
+        return pd.DataFrame()
+    headers = [h.strip().lower() for h in raw[0]]
+    df = pd.DataFrame(raw[1:], columns=headers)
+    df.columns = [c.strip() for c in df.columns]
+    # Usa apenas o mês mais recente disponível
+    if 'mes' in df.columns:
+        df['mes'] = df['mes'].astype(str).str.strip()
+        mes_max = df['mes'].max()
+        df = df[df['mes'] == mes_max]
+    if 'valor_mensal' in df.columns:
+        df['valor_mensal'] = df['valor_mensal'].apply(parse_currency)
+    return df
+
+
+def _normalizar(texto):
+    """Remove acentos e deixa minúsculo para comparação aproximada."""
+    return unicodedata.normalize('NFKD', str(texto).lower()).encode('ascii', 'ignore').decode()
+
+
+def match_mrr(produto, mrr_produtos):
+    """Retorna o nome mais próximo da lista mrr_produtos, ou None se distância > limiar."""
+    norm_prod  = _normalizar(produto)
+    norm_lista = [_normalizar(p) for p in mrr_produtos]
+    matches    = difflib.get_close_matches(norm_prod, norm_lista, n=1, cutoff=0.6)
+    if not matches:
+        return None
+    idx = norm_lista.index(matches[0])
+    return mrr_produtos[idx]
 
 
 @st.cache_data(ttl=300)
@@ -527,7 +571,27 @@ with tab2:
                 return 'Atrasado' if prev < hoje else 'No prazo'
             pendentes['STATUS'] = pendentes.apply(status, axis=1)
 
-        k1, k2, k3, k4, k5 = st.columns(5)
+        # ── Cruzamento com MRR ───────────────────────────────────────────────
+        try:
+            df_mrr = load_mrr_data()
+        except Exception:
+            df_mrr = pd.DataFrame()
+
+        if not df_mrr.empty and 'produto' in df_mrr.columns and 'PRODUTO' in pendentes.columns:
+            mrr_produtos = df_mrr['produto'].tolist()
+            pendentes['_prod_match'] = pendentes['PRODUTO'].apply(
+                lambda p: match_mrr(p, mrr_produtos)
+            )
+            mrr_map = df_mrr.set_index('produto')['valor_mensal'].to_dict()
+            pendentes['TICKET MÉDIO'] = pendentes['_prod_match'].map(mrr_map)
+            pendentes['MRR PREVISTO'] = pendentes.apply(
+                lambda r: r['TICKET MÉDIO'] * r['QUANTIDADE COMPRADA']
+                if pd.notna(r['TICKET MÉDIO']) and 'QUANTIDADE COMPRADA' in pendentes.columns
+                else None, axis=1
+            )
+            pendentes.drop(columns=['_prod_match'], inplace=True)
+
+        k1, k2, k3, k4, k5, k6 = st.columns(6)
         k1.metric('Pedidos Pendentes', len(pendentes))
         qtd_pendente = int(pendentes['QUANTIDADE COMPRADA'].sum()) if 'QUANTIDADE COMPRADA' in pendentes.columns else 0
         k2.metric('Ativos a Chegar', f'{qtd_pendente:,}'.replace(',', '.'))
@@ -538,6 +602,8 @@ with tab2:
         k4.metric('Ativos Atrasados', f'{qtd_atrasada:,}'.replace(',', '.'))
         valor_pendente = pendentes['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in pendentes.columns else 0
         k5.metric('Valor em Trânsito', fmt_brl(valor_pendente))
+        mrr_previsto = pendentes['MRR PREVISTO'].sum() if 'MRR PREVISTO' in pendentes.columns else 0
+        k6.metric('MRR Previsto', fmt_brl(mrr_previsto))
 
         st.divider()
 
@@ -553,7 +619,7 @@ with tab2:
         ]
         if COL_PREVISAO:
             COLS_LOG.append(COL_PREVISAO)
-        COLS_LOG += ['QUANTIDADE COMPRADA', 'LEAD TIME MÉDIO (dias)']
+        COLS_LOG += ['QUANTIDADE COMPRADA', 'TICKET MÉDIO', 'MRR PREVISTO', 'LEAD TIME MÉDIO (dias)']
 
         cols_show = [c for c in COLS_LOG if c in pendentes.columns]
         df_show   = pendentes[cols_show].copy()
@@ -572,6 +638,11 @@ with tab2:
             df_show['PREÇO TOTAL'] = df_show['PREÇO TOTAL'].apply(
                 lambda x: fmt_brl(x) if isinstance(x, float) else '-'
             )
+        for col_val in ['TICKET MÉDIO', 'MRR PREVISTO']:
+            if col_val in df_show.columns:
+                df_show[col_val] = df_show[col_val].apply(
+                    lambda x: fmt_brl(x) if pd.notna(x) and x != 0 else '-'
+                )
 
         # Ordena: Atrasado primeiro, depois No prazo, Sem previsão por último
         if 'STATUS' in df_show.columns:
