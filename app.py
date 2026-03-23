@@ -424,56 +424,61 @@ with tab1:
 
     st.markdown('<br>', unsafe_allow_html=True)
 
-    # ── Cards por produto ─────────────────────────────────────────────────────
-    if 'PRODUTO' in df_f.columns and 'QUANTIDADE COMPRADA' in df_f.columns:
-        st.markdown('##### Resumo por Produto')
+    # ── Cards por produto (apenas itens já recebidos) ────────────────────────
+    if 'PRODUTO' in df_recebidos.columns and 'QUANTIDADE RECEBIDA' in df_recebidos.columns:
+        st.markdown('##### Itens Recebidos no Período')
 
-        top_produtos = (
-            df_f.groupby(['PRODUTO', 'FORNECEDOR'])
-            .agg(qtd=('QUANTIDADE COMPRADA', 'sum'), valor=('PREÇO TOTAL', 'sum'))
+        qtd_col_rec = 'QUANTIDADE RECEBIDA'
+        recebidos_prod = (
+            df_recebidos.groupby(['PRODUTO', 'FORNECEDOR'])
+            .agg(qtd=(qtd_col_rec, 'sum'), valor=('PREÇO TOTAL', 'sum'))
             .reset_index()
             .sort_values('qtd', ascending=False)
-            .head(8)
         )
 
-        cols_prod = st.columns(min(len(top_produtos), 4))
-        for i, (_, row) in enumerate(top_produtos.iterrows()):
-            with cols_prod[i % 4]:
-                nome    = str(row['PRODUTO'])[:40]
-                forn    = str(row['FORNECEDOR'])[:30]
-                qtd     = int(row['qtd'])
-                valor   = fmt_brl(row['valor'])
-                qtd_fmt = f'{qtd:,}'.replace(',', '.')
-                st.markdown(f"""
-                <div class="produto-card">
-                    <div class="prod-nome" title="{row['PRODUTO']}">{nome}</div>
-                    <div class="prod-forn">{forn}</div>
-                    <div class="prod-qtd">{qtd_fmt}</div>
-                    <div class="prod-qtd-label">unidades compradas</div>
-                    <div class="prod-valor">{valor}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # Adiciona MRR por produto
+        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns:
+            mrr_prods_vg2 = df_mrr_vg['produto'].tolist()
+            mrr_map_vg2   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+            def ticket_rec(nome):
+                norm = _normalizar(nome)
+                for p in mrr_prods_vg2:
+                    if _normalizar(p) == norm:
+                        return mrr_map_vg2[p]
+                nl = [_normalizar(p) for p in mrr_prods_vg2]
+                m  = difflib.get_close_matches(norm, nl, n=1, cutoff=0.5)
+                return mrr_map_vg2[mrr_prods_vg2[nl.index(m[0])]] if m else 0.0
+            recebidos_prod['ticket'] = recebidos_prod['PRODUTO'].apply(ticket_rec)
+            recebidos_prod['mrr']    = recebidos_prod['ticket'] * recebidos_prod['qtd']
+        else:
+            recebidos_prod['ticket'] = 0.0
+            recebidos_prod['mrr']    = 0.0
 
-        # segunda linha se houver mais de 4 produtos
-        if len(top_produtos) > 4:
-            st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
-            cols_prod2 = st.columns(min(len(top_produtos) - 4, 4))
-            for i, (_, row) in enumerate(top_produtos.iloc[4:].iterrows()):
-                with cols_prod2[i % 4]:
-                    nome  = str(row['PRODUTO'])[:40]
-                    forn  = str(row['FORNECEDOR'])[:30]
-                    qtd   = int(row['qtd'])
-                    valor = fmt_brl(row['valor'])
-                    qtd_fmt = f'{qtd:,}'.replace(',', '.')
+        def render_cards(df_cards):
+            cols_c = st.columns(min(len(df_cards), 4))
+            for i, (_, row) in enumerate(df_cards.iterrows()):
+                with cols_c[i % 4]:
+                    nome    = str(row['PRODUTO'])[:40]
+                    forn    = str(row['FORNECEDOR'])[:30]
+                    qtd_fmt = f'{int(row["qtd"]):,}'.replace(',', '.')
+                    mrr_str = fmt_brl(row['mrr']) if row['mrr'] > 0 else '-'
                     st.markdown(f"""
                     <div class="produto-card">
                         <div class="prod-nome" title="{row['PRODUTO']}">{nome}</div>
                         <div class="prod-forn">{forn}</div>
                         <div class="prod-qtd">{qtd_fmt}</div>
-                        <div class="prod-qtd-label">unidades compradas</div>
-                        <div class="prod-valor">{valor}</div>
+                        <div class="prod-qtd-label">unidades recebidas</div>
+                        <div class="prod-valor">MRR: {mrr_str}</div>
                     </div>
                     """, unsafe_allow_html=True)
+
+        if recebidos_prod.empty:
+            st.info('Nenhum item recebido no período selecionado.')
+        else:
+            render_cards(recebidos_prod.head(4))
+            if len(recebidos_prod) > 4:
+                st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+                render_cards(recebidos_prod.iloc[4:8])
 
     st.markdown('<br>', unsafe_allow_html=True)
 
