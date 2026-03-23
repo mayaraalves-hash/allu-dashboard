@@ -381,12 +381,40 @@ with tab1:
     lead_medio     = df_recebidos['LEAD TIME'].mean() if 'LEAD TIME' in df_recebidos.columns else None
     n_pedidos      = len(df_f)
 
-    k1, k2, k3, k4, k5 = st.columns(5)
+    # MRR gerado: itens já recebidos, cruzados com ticket médio da aba MRR
+    try:
+        df_mrr_vg = load_mrr_data()
+    except Exception:
+        df_mrr_vg = pd.DataFrame()
+
+    mrr_gerado = 0.0
+    if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_recebidos.columns:
+        mrr_prods_vg = df_mrr_vg['produto'].tolist()
+        mrr_map_vg   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+
+        def buscar_ticket_vg(nome):
+            norm = _normalizar(nome)
+            for p in mrr_prods_vg:
+                if _normalizar(p) == norm:
+                    return mrr_map_vg[p]
+            norm_lista = [_normalizar(p) for p in mrr_prods_vg]
+            matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
+            if matches:
+                return mrr_map_vg[mrr_prods_vg[norm_lista.index(matches[0])]]
+            return 0.0
+
+        qtd_col = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
+        mrr_gerado = df_recebidos.apply(
+            lambda r: buscar_ticket_vg(r['PRODUTO']) * r[qtd_col], axis=1
+        ).sum()
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric('Volume Total', fmt_brl(total_valor))
     k2.metric('Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
     k3.metric('Fornecedores', n_fornecedores)
     k4.metric('Pedidos', n_pedidos)
     k5.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
+    k6.metric('MRR Gerado', fmt_brl(mrr_gerado))
 
     st.markdown('<br>', unsafe_allow_html=True)
 
