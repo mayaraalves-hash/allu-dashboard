@@ -922,11 +922,19 @@ with tab4:
     if 'DATA DA COMPRA' in df_hist.columns:
         df_hist = df_hist.sort_values('DATA DA COMPRA', ascending=False)
 
-    # ── Filtro por modelo ─────────────────────────────────────────────────────
-    produtos_lista = sorted(df_hist['PRODUTO'].dropna().unique().tolist())
-    prod_sel = st.multiselect('Produto', produtos_lista, default=[], placeholder='Todos', key='hist_prod')
+    # ── Filtros ───────────────────────────────────────────────────────────────
+    hf1, hf2 = st.columns(2)
+    with hf1:
+        produtos_lista = sorted(df_hist['PRODUTO'].dropna().unique().tolist())
+        prod_sel = st.multiselect('Produto', produtos_lista, default=[], placeholder='Todos', key='hist_prod')
+    with hf2:
+        fp_lista = sorted(df_hist['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df_hist.columns else []
+        fp_hist_sel = st.multiselect('Forma de Pagamento', fp_lista, default=[], placeholder='Todos', key='hist_fp')
+
     if prod_sel:
         df_hist = df_hist[df_hist['PRODUTO'].isin(prod_sel)]
+    if fp_hist_sel:
+        df_hist = df_hist[df_hist['FORMA DE PAGAMENTO'].isin(fp_hist_sel)]
 
     # ── Resumo: último preço e variação por modelo ────────────────────────────
     if 'PREÇO UNITÁRIO' in df_hist.columns and 'DATA DA COMPRA' in df_hist.columns:
