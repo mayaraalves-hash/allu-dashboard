@@ -679,6 +679,29 @@ with tab2:
 
         st.divider()
 
+        # ── Resumo por modelo ────────────────────────────────────────────────
+        if 'PRODUTO' in pendentes.columns and 'QUANTIDADE COMPRADA' in pendentes.columns:
+            st.markdown('##### Volume por Modelo')
+            resumo_modelo = (
+                pendentes.groupby('PRODUTO')
+                .agg(
+                    qtd_total=('QUANTIDADE COMPRADA', 'sum'),
+                    pedidos=('PRODUTO', 'count'),
+                    mrr_total=('MRR PREVISTO', 'sum') if 'MRR PREVISTO' in pendentes.columns else ('QUANTIDADE COMPRADA', 'sum'),
+                )
+                .reset_index()
+                .sort_values('qtd_total', ascending=False)
+            )
+            resumo_modelo.columns = ['Produto', 'Qtd Total', 'Pedidos', 'MRR Previsto']
+            resumo_modelo['MRR Previsto'] = resumo_modelo['MRR Previsto'].apply(
+                lambda x: fmt_brl(x) if pd.notna(x) and x > 0 else '-'
+            )
+            resumo_modelo['Qtd Total'] = resumo_modelo['Qtd Total'].apply(
+                lambda x: f'{int(x):,}'.replace(',', '.')
+            )
+            st.dataframe(resumo_modelo, use_container_width=True, hide_index=True)
+            st.markdown('##### Pedidos Detalhados')
+
         # Busca coluna de previsão por substring (ignora acentuação exata)
         COL_PREVISAO = next(
             (c for c in pendentes.columns if 'PREVIS' in c.upper()),
