@@ -922,10 +922,11 @@ with tab4:
     if 'DATA DA COMPRA' in df_hist.columns:
         df_hist = df_hist.sort_values('DATA DA COMPRA', ascending=False)
 
-    # ── Filtro de busca por modelo ────────────────────────────────────────────
-    busca = st.text_input('Buscar produto', placeholder='Ex: iPhone 17, MacBook, Notebook...', key='hist_busca')
-    if busca.strip():
-        df_hist = df_hist[df_hist['PRODUTO'].str.contains(busca.strip(), case=False, na=False)]
+    # ── Filtro por modelo ─────────────────────────────────────────────────────
+    produtos_lista = sorted(df_hist['PRODUTO'].dropna().unique().tolist())
+    prod_sel = st.multiselect('Produto', produtos_lista, default=[], placeholder='Todos', key='hist_prod')
+    if prod_sel:
+        df_hist = df_hist[df_hist['PRODUTO'].isin(prod_sel)]
 
     # ── Resumo: último preço e variação por modelo ────────────────────────────
     if 'PREÇO UNITÁRIO' in df_hist.columns and 'DATA DA COMPRA' in df_hist.columns:
