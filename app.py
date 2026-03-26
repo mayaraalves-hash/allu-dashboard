@@ -938,24 +938,41 @@ with tab4:
 
     # ── Resumo: último preço e variação por modelo ────────────────────────────
     if 'PREÇO UNITÁRIO' in df_hist.columns and 'DATA DA COMPRA' in df_hist.columns:
+        df_sorted = df_hist.sort_values('DATA DA COMPRA')
+
+        # Para cada produto: linha do último preço e linha do menor preço
+        def resumo_produto(g):
+            ultima = g.iloc[-1]
+            menor  = g.loc[g['PREÇO UNITÁRIO'].idxmin()]
+            return pd.Series({
+                'Fornecedor':        ultima.get('FORNECEDOR', '-'),
+                'Ultima_Compra':     ultima.get('DATA DA COMPRA'),
+                'Ultimo_Preco':      ultima.get('PREÇO UNITÁRIO'),
+                'Ultimo_FP':         ultima.get('FORMA DE PAGAMENTO', '-'),
+                'Menor_Preco':       menor.get('PREÇO UNITÁRIO'),
+                'Menor_FP':          menor.get('FORMA DE PAGAMENTO', '-'),
+                'Menor_Data':        menor.get('DATA DA COMPRA'),
+                'Maior_Preco':       g['PREÇO UNITÁRIO'].max(),
+                'Qtd_Compras':       len(g),
+            })
+
         ultimo_preco = (
-            df_hist.sort_values('DATA DA COMPRA')
-            .groupby('PRODUTO')
-            .agg(
-                Fornecedor=('FORNECEDOR', 'last'),
-                Ultima_Compra=('DATA DA COMPRA', 'last'),
-                Ultimo_Preco=('PREÇO UNITÁRIO', 'last'),
-                Menor_Preco=('PREÇO UNITÁRIO', 'min'),
-                Maior_Preco=('PREÇO UNITÁRIO', 'max'),
-                Qtd_Compras=('PRODUTO', 'count'),
-            )
+            df_sorted.groupby('PRODUTO')
+            .apply(resumo_produto)
             .reset_index()
             .sort_values('Ultima_Compra', ascending=False)
         )
+
         ultimo_preco['Ultima_Compra'] = pd.to_datetime(ultimo_preco['Ultima_Compra']).dt.strftime('%d/%m/%Y')
+        ultimo_preco['Menor_Data']    = pd.to_datetime(ultimo_preco['Menor_Data']).dt.strftime('%d/%m/%Y')
         for col in ['Ultimo_Preco', 'Menor_Preco', 'Maior_Preco']:
             ultimo_preco[col] = ultimo_preco[col].apply(fmt_brl)
-        ultimo_preco.columns = ['Produto', 'Último Fornecedor', 'Última Compra', 'Último Preço', 'Menor Preço', 'Maior Preço', 'Nº Compras']
+        ultimo_preco.columns = [
+            'Produto', 'Último Fornecedor', 'Última Compra',
+            'Último Preço', 'Pagamento (último)',
+            'Menor Preço', 'Pagamento (menor)', 'Data Menor Preço',
+            'Maior Preço', 'Nº Compras',
+        ]
 
         st.markdown('##### Resumo por Modelo')
         st.dataframe(ultimo_preco, use_container_width=True, hide_index=True)
