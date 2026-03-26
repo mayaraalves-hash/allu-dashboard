@@ -371,7 +371,7 @@ if fp_sel:
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto'])
+tab1, tab2, tab3, tab4 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto', 'Histórico de Preços'])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — VISÃO GERAL
@@ -903,3 +903,67 @@ with tab3:
                 legend=dict(orientation='h', yanchor='bottom', y=1.02),
             )
             st.plotly_chart(fig_c, use_container_width=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 4 — HISTÓRICO DE PREÇOS
+# ══════════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.markdown('### Histórico de Preços por Modelo')
+
+    colunas_hist = ['PRODUTO', 'FORNECEDOR', 'DATA DA COMPRA', 'PREÇO UNITÁRIO', 'FORMA DE PAGAMENTO', 'FILIAL']
+    colunas_hist = [c for c in colunas_hist if c in df.columns]
+
+    df_hist = df[colunas_hist].copy()
+    df_hist = df_hist[df_hist['PRODUTO'].astype(str).str.strip() != '']
+
+    if 'PREÇO UNITÁRIO' in df_hist.columns:
+        df_hist = df_hist[df_hist['PREÇO UNITÁRIO'] > 0]
+
+    if 'DATA DA COMPRA' in df_hist.columns:
+        df_hist = df_hist.sort_values('DATA DA COMPRA', ascending=False)
+
+    # ── Filtro de busca por modelo ────────────────────────────────────────────
+    busca = st.text_input('Buscar produto', placeholder='Ex: iPhone 17, MacBook, Notebook...', key='hist_busca')
+    if busca.strip():
+        df_hist = df_hist[df_hist['PRODUTO'].str.contains(busca.strip(), case=False, na=False)]
+
+    # ── Resumo: último preço e variação por modelo ────────────────────────────
+    if 'PREÇO UNITÁRIO' in df_hist.columns and 'DATA DA COMPRA' in df_hist.columns:
+        ultimo_preco = (
+            df_hist.sort_values('DATA DA COMPRA')
+            .groupby('PRODUTO')
+            .agg(
+                Fornecedor=('FORNECEDOR', 'last'),
+                Ultima_Compra=('DATA DA COMPRA', 'last'),
+                Ultimo_Preco=('PREÇO UNITÁRIO', 'last'),
+                Menor_Preco=('PREÇO UNITÁRIO', 'min'),
+                Maior_Preco=('PREÇO UNITÁRIO', 'max'),
+                Qtd_Compras=('PRODUTO', 'count'),
+            )
+            .reset_index()
+            .sort_values('Ultima_Compra', ascending=False)
+        )
+        ultimo_preco['Ultima_Compra'] = pd.to_datetime(ultimo_preco['Ultima_Compra']).dt.strftime('%d/%m/%Y')
+        for col in ['Ultimo_Preco', 'Menor_Preco', 'Maior_Preco']:
+            ultimo_preco[col] = ultimo_preco[col].apply(fmt_brl)
+        ultimo_preco.columns = ['Produto', 'Último Fornecedor', 'Última Compra', 'Último Preço', 'Menor Preço', 'Maior Preço', 'Nº Compras']
+
+        st.markdown('##### Resumo por Modelo')
+        st.dataframe(ultimo_preco, use_container_width=True, hide_index=True)
+
+        st.markdown('##### Todas as Compras')
+
+    # ── Tabela completa ───────────────────────────────────────────────────────
+    df_hist_show = df_hist.copy()
+    if 'DATA DA COMPRA' in df_hist_show.columns:
+        df_hist_show['DATA DA COMPRA'] = pd.to_datetime(df_hist_show['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
+    if 'PREÇO UNITÁRIO' in df_hist_show.columns:
+        df_hist_show['PREÇO UNITÁRIO'] = df_hist_show['PREÇO UNITÁRIO'].apply(fmt_brl)
+
+    df_hist_show = df_hist_show.rename(columns={
+        'DATA DA COMPRA': 'Data da Compra',
+        'PREÇO UNITÁRIO': 'Preço Unitário',
+        'FORMA DE PAGAMENTO': 'Forma de Pagamento',
+    })
+
+    st.dataframe(df_hist_show, use_container_width=True, hide_index=True)
