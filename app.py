@@ -565,11 +565,12 @@ with tab1:
                                title_font_color=COR_SECUNDARIA)
             st.plotly_chart(fig4, use_container_width=True)
 
-    # ── Histórico de compras por mês ──────────────────────────────────────────
-    if 'ANO_MES' in df_f.columns:
+    # ── Histórico de compras por mês (sem filtro, a partir de nov/25) ─────────
+    if 'ANO_MES' in df.columns:
         st.markdown('##### Histórico de Compras')
+        df_hist_geral = df[df['ANO_MES'] >= '2025-11']
         hist = (
-            df_f.groupby('ANO_MES')
+            df_hist_geral.groupby('ANO_MES')
             .agg(
                 Quantidade=('QUANTIDADE COMPRADA', 'sum'),
                 Custo_Total=('PREÇO TOTAL', 'sum'),
