@@ -565,6 +565,25 @@ with tab1:
                                title_font_color=COR_SECUNDARIA)
             st.plotly_chart(fig4, use_container_width=True)
 
+    # ── Histórico de compras por mês ──────────────────────────────────────────
+    if 'ANO_MES' in df_f.columns:
+        st.markdown('##### Histórico de Compras')
+        hist = (
+            df_f.groupby('ANO_MES')
+            .agg(
+                Quantidade=('QUANTIDADE COMPRADA', 'sum'),
+                Custo_Total=('PREÇO TOTAL', 'sum'),
+                Pedidos=('ANO_MES', 'count'),
+            )
+            .reset_index()
+            .sort_values('ANO_MES', ascending=False)
+        )
+        hist['Custo Total'] = hist['Custo_Total'].apply(fmt_brl)
+        hist['Quantidade']  = hist['Quantidade'].apply(lambda x: f'{int(x):,}'.replace(',', '.'))
+        hist = hist.rename(columns={'ANO_MES': 'Mês', 'Pedidos': 'Nº Pedidos'})
+        hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total']]
+        st.dataframe(hist, use_container_width=True, hide_index=True)
+
     # Lead time — somente itens recebidos
     if 'FORNECEDOR' in df_recebidos.columns and 'LEAD TIME' in df_recebidos.columns:
         st.markdown('### Lead Time Médio por Fornecedor')
