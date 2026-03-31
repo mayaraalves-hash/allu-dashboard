@@ -493,21 +493,45 @@ with tab1:
     # ── Histórico de compras por mês (sem filtro, a partir de nov/25) ─────────
     if 'ANO_MES' in df.columns:
         st.markdown('##### Histórico de Compras')
-        df_hist_geral = df[df['ANO_MES'] >= '2025-11']
+        df_hist_geral = df[df['ANO_MES'] >= '2025-11'].copy()
+
+        # Calcula MRR por item recebido (usa quantidade recebida × ticket médio)
+        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_hist_geral.columns:
+            mrr_prods_h  = df_mrr_vg['produto'].tolist()
+            mrr_map_h    = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+            norm_lista_h = [_normalizar(p) for p in mrr_prods_h]
+
+            def ticket_hist(nome):
+                norm = _normalizar(nome)
+                if norm in norm_lista_h:
+                    return mrr_map_h[mrr_prods_h[norm_lista_h.index(norm)]]
+                m = difflib.get_close_matches(norm, norm_lista_h, n=1, cutoff=0.5)
+                return mrr_map_h[mrr_prods_h[norm_lista_h.index(m[0])]] if m else 0.0
+
+            qtd_col_h = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_hist_geral.columns else 'QUANTIDADE COMPRADA'
+            df_hist_geral['_mrr'] = df_hist_geral.apply(
+                lambda r: ticket_hist(r['PRODUTO']) * r[qtd_col_h]
+                if pd.notna(r[qtd_col_h]) and r[qtd_col_h] > 0 else 0.0, axis=1
+            )
+        else:
+            df_hist_geral['_mrr'] = 0.0
+
         hist = (
             df_hist_geral.groupby('ANO_MES')
             .agg(
                 Quantidade=('QUANTIDADE COMPRADA', 'sum'),
                 Custo_Total=('PREÇO TOTAL', 'sum'),
                 Pedidos=('ANO_MES', 'count'),
+                MRR_Total=('_mrr', 'sum'),
             )
             .reset_index()
             .sort_values('ANO_MES', ascending=False)
         )
         hist['Custo Total'] = hist['Custo_Total'].apply(fmt_brl)
+        hist['MRR Gerado']  = hist['MRR_Total'].apply(fmt_brl)
         hist['Quantidade']  = hist['Quantidade'].apply(lambda x: f'{int(x):,}'.replace(',', '.'))
         hist = hist.rename(columns={'ANO_MES': 'Mês', 'Pedidos': 'Nº Pedidos'})
-        hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total']]
+        hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total', 'MRR Gerado']]
         st.dataframe(hist, use_container_width=True, hide_index=True)
 
     st.markdown('<br>', unsafe_allow_html=True)
