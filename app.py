@@ -371,7 +371,7 @@ if fp_sel:
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto', 'Histórico de Preços'])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto', 'Histórico de Preços', 'Análises'])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — VISÃO GERAL
@@ -490,81 +490,6 @@ with tab1:
 
     st.markdown('<br>', unsafe_allow_html=True)
 
-    # ── Gráficos ──────────────────────────────────────────────────────────────
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if 'FORNECEDOR' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
-            by_forn = (
-                df_f.groupby('FORNECEDOR')['PREÇO TOTAL']
-                .sum().reset_index()
-                .sort_values('PREÇO TOTAL', ascending=True)
-                .tail(15)
-            )
-            fig = px.bar(
-                by_forn, x='PREÇO TOTAL', y='FORNECEDOR', orientation='h',
-                title='Volume por Fornecedor (R$)',
-                labels={'PREÇO TOTAL': 'Total (R$)', 'FORNECEDOR': ''},
-                color_discrete_sequence=[COR_PRIMARIA],
-            )
-            fig.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white',
-                              title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        if 'FORMA DE PAGAMENTO' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
-            by_fp = (
-                df_f[df_f['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
-                .groupby('FORMA DE PAGAMENTO')['PREÇO TOTAL']
-                .sum().reset_index()
-            )
-            fig2 = px.pie(
-                by_fp, values='PREÇO TOTAL', names='FORMA DE PAGAMENTO',
-                title='Volume por Forma de Pagamento',
-                color_discrete_sequence=CORES_GRAFICOS,
-                hole=0.4,
-            )
-            fig2.update_layout(height=400, paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig2, use_container_width=True)
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        if 'ANO_MES' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
-            by_mes = (
-                df_f.groupby('ANO_MES')['PREÇO TOTAL']
-                .sum().reset_index()
-                .sort_values('ANO_MES')
-            )
-            fig3 = px.bar(
-                by_mes, x='ANO_MES', y='PREÇO TOTAL',
-                title='Volume Mensal (R$)',
-                labels={'ANO_MES': '', 'PREÇO TOTAL': 'Total (R$)'},
-                color_discrete_sequence=[COR_PRIMARIA],
-            )
-            fig3.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig3, use_container_width=True)
-
-    with col4:
-        if 'FORNECEDOR' in df_f.columns and 'QUANTIDADE COMPRADA' in df_f.columns:
-            by_forn_q = (
-                df_f.groupby('FORNECEDOR')['QUANTIDADE COMPRADA']
-                .sum().reset_index()
-                .sort_values('QUANTIDADE COMPRADA', ascending=True)
-                .tail(15)
-            )
-            fig4 = px.bar(
-                by_forn_q, x='QUANTIDADE COMPRADA', y='FORNECEDOR', orientation='h',
-                title='Quantidade Comprada por Fornecedor',
-                labels={'QUANTIDADE COMPRADA': 'Qtd', 'FORNECEDOR': ''},
-                color_discrete_sequence=[COR_ACENTO],
-            )
-            fig4.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig4, use_container_width=True)
-
     # ── Histórico de compras por mês (sem filtro, a partir de nov/25) ─────────
     if 'ANO_MES' in df.columns:
         st.markdown('##### Histórico de Compras')
@@ -585,23 +510,21 @@ with tab1:
         hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total']]
         st.dataframe(hist, use_container_width=True, hide_index=True)
 
-    # Lead time — somente itens recebidos
-    if 'FORNECEDOR' in df_recebidos.columns and 'LEAD TIME' in df_recebidos.columns:
-        st.markdown('### Lead Time Médio por Fornecedor')
-        lt_forn = (
-            df_recebidos.groupby('FORNECEDOR')['LEAD TIME']
-            .mean().dropna().round(1).reset_index()
-            .sort_values('LEAD TIME', ascending=False)
-        )
-        lt_forn.columns = ['Fornecedor', 'Lead Time Médio (dias)']
-        fig5 = px.bar(
-            lt_forn, x='Fornecedor', y='Lead Time Médio (dias)',
-            color='Lead Time Médio (dias)',
-            color_continuous_scale=['#00C853', '#69F0AE', '#FFB347', '#D32F2F'],
-        )
-        fig5.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                           coloraxis_showscale=False)
-        st.plotly_chart(fig5, use_container_width=True)
+    st.markdown('<br>', unsafe_allow_html=True)
+
+    # ── Pedidos do período ────────────────────────────────────────────────────
+    st.markdown('##### Pedidos do Período')
+    cols_pedidos = ['DATA DA COMPRA', 'FORNECEDOR', 'PRODUTO', 'FILIAL',
+                    'QUANTIDADE COMPRADA', 'PREÇO UNITÁRIO', 'PREÇO TOTAL', 'FORMA DE PAGAMENTO']
+    cols_pedidos = [c for c in cols_pedidos if c in df_f.columns]
+    df_ped = df_f[cols_pedidos].copy()
+    if 'DATA DA COMPRA' in df_ped.columns:
+        df_ped['DATA DA COMPRA'] = pd.to_datetime(df_ped['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
+    for col in ['PREÇO UNITÁRIO', 'PREÇO TOTAL']:
+        if col in df_ped.columns:
+            df_ped[col] = df_ped[col].apply(fmt_brl)
+    df_ped = df_ped.sort_values('DATA DA COMPRA', ascending=False) if 'DATA DA COMPRA' in df_ped.columns else df_ped
+    st.dataframe(df_ped, use_container_width=True, hide_index=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1013,3 +936,102 @@ with tab4:
     })
 
     st.dataframe(df_hist_show, use_container_width=True, hide_index=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ABA 5 — ANÁLISES
+# ══════════════════════════════════════════════════════════════════════════════
+with tab5:
+    st.markdown('### Análises')
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if 'FORNECEDOR' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+            by_forn = (
+                df_f.groupby('FORNECEDOR')['PREÇO TOTAL']
+                .sum().reset_index()
+                .sort_values('PREÇO TOTAL', ascending=True)
+                .tail(15)
+            )
+            fig = px.bar(
+                by_forn, x='PREÇO TOTAL', y='FORNECEDOR', orientation='h',
+                title='Volume por Fornecedor (R$)',
+                labels={'PREÇO TOTAL': 'Total (R$)', 'FORNECEDOR': ''},
+                color_discrete_sequence=[COR_PRIMARIA],
+            )
+            fig.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white',
+                              title_font_color=COR_SECUNDARIA)
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        if 'FORMA DE PAGAMENTO' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+            by_fp = (
+                df_f[df_f['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
+                .groupby('FORMA DE PAGAMENTO')['PREÇO TOTAL']
+                .sum().reset_index()
+            )
+            fig2 = px.pie(
+                by_fp, values='PREÇO TOTAL', names='FORMA DE PAGAMENTO',
+                title='Volume por Forma de Pagamento',
+                color_discrete_sequence=CORES_GRAFICOS,
+                hole=0.4,
+            )
+            fig2.update_layout(height=400, paper_bgcolor='white',
+                               title_font_color=COR_SECUNDARIA)
+            st.plotly_chart(fig2, use_container_width=True)
+
+    col3, col4 = st.columns(2)
+
+    with col3:
+        if 'ANO_MES' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+            by_mes = (
+                df_f.groupby('ANO_MES')['PREÇO TOTAL']
+                .sum().reset_index()
+                .sort_values('ANO_MES')
+            )
+            fig3 = px.bar(
+                by_mes, x='ANO_MES', y='PREÇO TOTAL',
+                title='Volume Mensal (R$)',
+                labels={'ANO_MES': '', 'PREÇO TOTAL': 'Total (R$)'},
+                color_discrete_sequence=[COR_PRIMARIA],
+            )
+            fig3.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
+                               title_font_color=COR_SECUNDARIA)
+            st.plotly_chart(fig3, use_container_width=True)
+
+    with col4:
+        if 'FORNECEDOR' in df_f.columns and 'QUANTIDADE COMPRADA' in df_f.columns:
+            by_forn_q = (
+                df_f.groupby('FORNECEDOR')['QUANTIDADE COMPRADA']
+                .sum().reset_index()
+                .sort_values('QUANTIDADE COMPRADA', ascending=True)
+                .tail(15)
+            )
+            fig4 = px.bar(
+                by_forn_q, x='QUANTIDADE COMPRADA', y='FORNECEDOR', orientation='h',
+                title='Quantidade Comprada por Fornecedor',
+                labels={'QUANTIDADE COMPRADA': 'Qtd', 'FORNECEDOR': ''},
+                color_discrete_sequence=[COR_ACENTO],
+            )
+            fig4.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
+                               title_font_color=COR_SECUNDARIA)
+            st.plotly_chart(fig4, use_container_width=True)
+
+    # Lead time — somente itens recebidos
+    df_recebidos_an = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else df_f
+    if 'FORNECEDOR' in df_recebidos_an.columns and 'LEAD TIME' in df_recebidos_an.columns:
+        st.markdown('##### Lead Time Médio por Fornecedor')
+        lt_forn = (
+            df_recebidos_an.groupby('FORNECEDOR')['LEAD TIME']
+            .mean().dropna().round(1).reset_index()
+            .sort_values('LEAD TIME', ascending=False)
+        )
+        lt_forn.columns = ['Fornecedor', 'Lead Time Médio (dias)']
+        fig5 = px.bar(
+            lt_forn, x='Fornecedor', y='Lead Time Médio (dias)',
+            color='Lead Time Médio (dias)',
+            color_continuous_scale=['#00C853', '#69F0AE', '#FFB347', '#D32F2F'],
+        )
+        fig5.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
+                           coloraxis_showscale=False)
+        st.plotly_chart(fig5, use_container_width=True)
