@@ -326,7 +326,12 @@ with st.expander('Filtros', expanded=False):
     mes_inicio = hoje_date.replace(day=1)
     mes_fim    = hoje_date
     default_ini = max(mes_inicio, data_min) if data_min else mes_inicio
-    default_fim = min(mes_fim, data_max)    if data_max else mes_fim
+    default_fim = min(mes_fim,   data_max) if data_max else mes_fim
+    # Garante que default_ini nunca ultrapasse data_max (ex: virada de mês)
+    if data_max and default_ini > data_max:
+        default_ini = data_max
+    if data_min and default_fim < data_min:
+        default_fim = data_min
     with fd1:
         data_inicio = st.date_input('Data início', value=default_ini, min_value=data_min, max_value=data_max, key='f_data_ini', format='DD/MM/YYYY')
     with fd2:
