@@ -353,7 +353,7 @@ with st.expander('Filtros', expanded=False):
 
 # Aplicar filtros — lista vazia significa "sem filtro" (mostra tudo)
 df_f = df.copy()
-if 'DATA DA COMPRA' in df_f.columns and data_min and data_max:
+if 'DATA DA COMPRA' in df_f.columns and data_min:
     df_f = df_f[
         (df_f['DATA DA COMPRA'].dt.date >= data_inicio) &
         (df_f['DATA DA COMPRA'].dt.date <= data_fim)
