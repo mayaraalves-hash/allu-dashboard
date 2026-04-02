@@ -319,23 +319,16 @@ with st.expander('Filtros', expanded=False):
 
     # Linha 1: período com calendário
     fd1, fd2 = st.columns(2)
-    data_min = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
-    data_max = df['DATA DA COMPRA'].max().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
-    # Padrão: primeiro e último dia do mês atual
+    data_min  = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
     hoje_date = pd.Timestamp.today().date()
     mes_inicio = hoje_date.replace(day=1)
-    mes_fim    = hoje_date
     default_ini = max(mes_inicio, data_min) if data_min else mes_inicio
-    default_fim = min(mes_fim,   data_max) if data_max else mes_fim
-    # Garante que default_ini nunca ultrapasse data_max (ex: virada de mês)
-    if data_max and default_ini > data_max:
-        default_ini = data_max
-    if data_min and default_fim < data_min:
-        default_fim = data_min
+    if data_min and default_ini > hoje_date:
+        default_ini = data_min
     with fd1:
-        data_inicio = st.date_input('Data início', value=default_ini, min_value=data_min, max_value=data_max, key='f_data_ini', format='DD/MM/YYYY')
+        data_inicio = st.date_input('Data início', value=default_ini, min_value=data_min, max_value=hoje_date, key='f_data_ini', format='DD/MM/YYYY')
     with fd2:
-        data_fim = st.date_input('Data fim', value=default_fim, min_value=data_min, max_value=data_max, key='f_data_fim', format='DD/MM/YYYY')
+        data_fim = st.date_input('Data fim', value=hoje_date, min_value=data_min, max_value=hoje_date, key='f_data_fim', format='DD/MM/YYYY')
 
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
 
