@@ -312,60 +312,9 @@ if df.empty:
     st.warning('Nenhum dado encontrado na planilha.')
     st.stop()
 
-# ─── FILTROS (lista suspensa — vazio = todos) ─────────────────────────────────
-
-with st.expander('Filtros', expanded=False):
-    st.caption('Deixe em branco para considerar todos. Selecione para filtrar.')
-
-    # Linha 1: período com calendário
-    fd1, fd2 = st.columns(2)
-    data_min  = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
-    hoje_date = pd.Timestamp.today().date()
-    mes_inicio = hoje_date.replace(day=1)
-    default_ini = max(mes_inicio, data_min) if data_min else mes_inicio
-    if data_min and default_ini > hoje_date:
-        default_ini = data_min
-    with fd1:
-        data_inicio = st.date_input('Data início', value=default_ini, min_value=data_min, max_value=hoje_date, key='f_data_ini', format='DD/MM/YYYY')
-    with fd2:
-        data_fim = st.date_input('Data fim', value=hoje_date, min_value=data_min, max_value=hoje_date, key='f_data_fim', format='DD/MM/YYYY')
-
-    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
-
-    # Linha 2: demais filtros
-    fc1, fc2, fc3, fc4 = st.columns(4)
-
-    fornecedores = sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else []
-    with fc1:
-        forn_sel = st.multiselect('Fornecedor', fornecedores, default=[], placeholder='Todos', key='f_forn')
-
-    filiais = sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else []
-    with fc2:
-        filial_sel = st.multiselect('Filial', filiais, default=[], placeholder='Todos', key='f_filial')
-
-    formas_pag = sorted(df['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df.columns else []
-    with fc3:
-        fp_sel = st.multiselect('Forma de Pagamento', formas_pag, default=[], placeholder='Todos', key='f_fp')
-
-    anos = sorted(df['ANO'].dropna().unique().astype(int).tolist(), reverse=True) if 'ANO' in df.columns else []
-    with fc4:
-        ano_sel = st.multiselect('Ano', anos, default=[], placeholder='Todos', key='f_ano')
-
-# Aplicar filtros — lista vazia significa "sem filtro" (mostra tudo)
-df_f = df.copy()
-if 'DATA DA COMPRA' in df_f.columns and data_min:
-    df_f = df_f[
-        (df_f['DATA DA COMPRA'].dt.date >= data_inicio) &
-        (df_f['DATA DA COMPRA'].dt.date <= data_fim)
-    ]
-if ano_sel:
-    df_f = df_f[df_f['ANO'].isin(ano_sel)]
-if forn_sel:
-    df_f = df_f[df_f['FORNECEDOR'].isin(forn_sel)]
-if filial_sel:
-    df_f = df_f[df_f['FILIAL'].isin(filial_sel)]
-if fp_sel:
-    df_f = df_f[df_f['FORMA DE PAGAMENTO'].isin(fp_sel)]
+# ─── VALORES BASE ─────────────────────────────────────────────────────────────
+data_min  = df['DATA DA COMPRA'].min().date() if 'DATA DA COMPRA' in df.columns and df['DATA DA COMPRA'].notna().any() else None
+hoje_date = pd.Timestamp.today().date()
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
@@ -375,195 +324,291 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(['Visão Geral', 'Logística', 'Créditos
 # ABA 1 — VISÃO GERAL
 # ══════════════════════════════════════════════════════════════════════════════
 with tab1:
+    # ── Filtros da aba ────────────────────────────────────────────────────────
+    with st.expander('Filtros', expanded=True):
+        st.caption('Deixe em branco para considerar todos.')
+        vg_f1, vg_f2 = st.columns(2)
+        mes_inicio_vg = hoje_date.replace(day=1)
+        default_ini_vg = max(mes_inicio_vg, data_min) if data_min else mes_inicio_vg
+        if data_min and default_ini_vg > hoje_date:
+            default_ini_vg = data_min
+        with vg_f1:
+            vg_data_inicio = st.date_input('Data início', value=default_ini_vg, min_value=data_min, max_value=hoje_date, key='vg_data_ini', format='DD/MM/YYYY')
+        with vg_f2:
+            vg_data_fim = st.date_input('Data fim', value=hoje_date, min_value=data_min, max_value=hoje_date, key='vg_data_fim', format='DD/MM/YYYY')
+        vg_c1, vg_c2, vg_c3 = st.columns(3)
+        with vg_c1:
+            vg_forn = st.multiselect('Fornecedor', sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else [], default=[], placeholder='Todos', key='vg_forn')
+        with vg_c2:
+            vg_filial = st.multiselect('Filial', sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else [], default=[], placeholder='Todos', key='vg_filial')
+        with vg_c3:
+            vg_fp = st.multiselect('Forma de Pagamento', sorted(df['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df.columns else [], default=[], placeholder='Todos', key='vg_fp')
 
-    # ── KPIs gerais ──────────────────────────────────────────────────────────
-    total_valor    = df_f['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in df_f.columns else 0
-    total_qtd      = df_f['QUANTIDADE COMPRADA'].sum() if 'QUANTIDADE COMPRADA' in df_f.columns else 0
-    n_fornecedores = df_f['FORNECEDOR'].nunique() if 'FORNECEDOR' in df_f.columns else 0
-    # Lead time: apenas itens já recebidos (com DATA DE RECEBIMENTO preenchida)
-    df_recebidos   = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else df_f
-    lead_medio     = df_recebidos['LEAD TIME'].mean() if 'LEAD TIME' in df_recebidos.columns else None
-    n_pedidos      = len(df_f)
+    # Aplicar filtros
+    df_f = df.copy()
+    if data_min:
+        df_f = df_f[(df_f['DATA DA COMPRA'].dt.date >= vg_data_inicio) & (df_f['DATA DA COMPRA'].dt.date <= vg_data_fim)]
+    if vg_forn:
+        df_f = df_f[df_f['FORNECEDOR'].isin(vg_forn)]
+    if vg_filial:
+        df_f = df_f[df_f['FILIAL'].isin(vg_filial)]
+    if vg_fp:
+        df_f = df_f[df_f['FORMA DE PAGAMENTO'].isin(vg_fp)]
 
-    # MRR gerado: itens já recebidos, cruzados com ticket médio da aba MRR
-    try:
-        df_mrr_vg = load_mrr_data()
-    except Exception:
-        df_mrr_vg = pd.DataFrame()
+    # ── Toggle Compras / Recebimentos ─────────────────────────────────────────
+    visao_sel = st.radio('Visualizar', ['Compras', 'Recebimentos'], horizontal=True, key='vg_visao')
 
-    mrr_gerado = 0.0
-    if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_recebidos.columns:
-        mrr_prods_vg = df_mrr_vg['produto'].tolist()
-        mrr_map_vg   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+    if visao_sel == 'Compras':
+        # ── KPIs gerais ──────────────────────────────────────────────────────────
+        total_valor    = df_f['PREÇO TOTAL'].sum() if 'PREÇO TOTAL' in df_f.columns else 0
+        total_qtd      = df_f['QUANTIDADE COMPRADA'].sum() if 'QUANTIDADE COMPRADA' in df_f.columns else 0
+        n_fornecedores = df_f['FORNECEDOR'].nunique() if 'FORNECEDOR' in df_f.columns else 0
+        # Lead time: apenas itens já recebidos (com DATA DE RECEBIMENTO preenchida)
+        df_recebidos   = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else df_f
+        lead_medio     = df_recebidos['LEAD TIME'].mean() if 'LEAD TIME' in df_recebidos.columns else None
+        n_pedidos      = len(df_f)
 
-        def buscar_ticket_vg(nome):
-            norm = _normalizar(nome)
-            for p in mrr_prods_vg:
-                if _normalizar(p) == norm:
-                    return mrr_map_vg[p]
-            norm_lista = [_normalizar(p) for p in mrr_prods_vg]
-            matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
-            if matches:
-                return mrr_map_vg[mrr_prods_vg[norm_lista.index(matches[0])]]
-            return 0.0
+        # MRR gerado: itens já recebidos, cruzados com ticket médio da aba MRR
+        try:
+            df_mrr_vg = load_mrr_data()
+        except Exception:
+            df_mrr_vg = pd.DataFrame()
 
-        qtd_col = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
-        mrr_gerado = df_recebidos.apply(
-            lambda r: buscar_ticket_vg(r['PRODUTO']) * r[qtd_col], axis=1
-        ).sum()
+        mrr_gerado = 0.0
+        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_recebidos.columns:
+            mrr_prods_vg = df_mrr_vg['produto'].tolist()
+            mrr_map_vg   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
 
-    qtd_recebida = int(df_recebidos['QUANTIDADE RECEBIDA'].sum()) if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 0
-    qtd_pendente = int(total_qtd) - qtd_recebida
-
-    k1, k2, k3, k4 = st.columns(4)
-    k1.metric('Volume Total', fmt_brl(total_valor))
-    k2.metric('Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
-    k3.metric('Qtd Recebida', f'{qtd_recebida:,}'.replace(',', '.'))
-    k4.metric('Qtd Pendente', f'{qtd_pendente:,}'.replace(',', '.'))
-
-    k5, k6, k7, k8 = st.columns(4)
-    k5.metric('Fornecedores', n_fornecedores)
-    k6.metric('Pedidos', n_pedidos)
-    k7.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
-    k8.metric('MRR Gerado', fmt_brl(mrr_gerado))
-
-    st.markdown('<br>', unsafe_allow_html=True)
-
-    # ── Cards por produto (apenas itens já recebidos) ────────────────────────
-    if 'PRODUTO' in df_recebidos.columns and 'QUANTIDADE RECEBIDA' in df_recebidos.columns:
-        st.markdown('##### Itens Recebidos no Período')
-
-        qtd_col_rec = 'QUANTIDADE RECEBIDA'
-        recebidos_prod = (
-            df_recebidos.groupby(['PRODUTO', 'FORNECEDOR'])
-            .agg(qtd=(qtd_col_rec, 'sum'), valor=('PREÇO TOTAL', 'sum'))
-            .reset_index()
-            .sort_values('qtd', ascending=False)
-        )
-
-        # Adiciona MRR por produto
-        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns:
-            mrr_prods_vg2 = df_mrr_vg['produto'].tolist()
-            mrr_map_vg2   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
-            def ticket_rec(nome):
+            def buscar_ticket_vg(nome):
                 norm = _normalizar(nome)
-                for p in mrr_prods_vg2:
+                for p in mrr_prods_vg:
                     if _normalizar(p) == norm:
-                        return mrr_map_vg2[p]
-                nl = [_normalizar(p) for p in mrr_prods_vg2]
-                m  = difflib.get_close_matches(norm, nl, n=1, cutoff=0.5)
-                return mrr_map_vg2[mrr_prods_vg2[nl.index(m[0])]] if m else 0.0
-            recebidos_prod['ticket'] = recebidos_prod['PRODUTO'].apply(ticket_rec)
-            recebidos_prod['mrr']    = recebidos_prod['ticket'] * recebidos_prod['qtd']
-        else:
-            recebidos_prod['ticket'] = 0.0
-            recebidos_prod['mrr']    = 0.0
+                        return mrr_map_vg[p]
+                norm_lista = [_normalizar(p) for p in mrr_prods_vg]
+                matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
+                if matches:
+                    return mrr_map_vg[mrr_prods_vg[norm_lista.index(matches[0])]]
+                return 0.0
 
-        def render_cards(df_cards):
-            cols_c = st.columns(min(len(df_cards), 4))
-            for i, (_, row) in enumerate(df_cards.iterrows()):
-                with cols_c[i % 4]:
-                    nome    = str(row['PRODUTO'])[:40]
-                    forn    = str(row['FORNECEDOR'])[:30]
-                    qtd_fmt = f'{int(row["qtd"]):,}'.replace(',', '.')
-                    mrr_str = fmt_brl(row['mrr']) if row['mrr'] > 0 else '-'
-                    st.markdown(f"""
-                    <div class="produto-card">
-                        <div class="prod-nome" title="{row['PRODUTO']}">{nome}</div>
-                        <div class="prod-forn">{forn}</div>
-                        <div class="prod-qtd">{qtd_fmt}</div>
-                        <div class="prod-qtd-label">unidades recebidas</div>
-                        <div class="prod-valor">MRR: {mrr_str}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
+            qtd_col = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
+            mrr_gerado = df_recebidos.apply(
+                lambda r: buscar_ticket_vg(r['PRODUTO']) * r[qtd_col], axis=1
+            ).sum()
 
-        if recebidos_prod.empty:
+        qtd_recebida = int(df_recebidos['QUANTIDADE RECEBIDA'].sum()) if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 0
+        qtd_pendente = int(total_qtd) - qtd_recebida
+
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric('Volume Total', fmt_brl(total_valor))
+        k2.metric('Qtd Comprada', f'{int(total_qtd):,}'.replace(',', '.'))
+        k3.metric('Qtd Recebida', f'{qtd_recebida:,}'.replace(',', '.'))
+        k4.metric('Qtd Pendente', f'{qtd_pendente:,}'.replace(',', '.'))
+
+        k5, k6, k7, k8 = st.columns(4)
+        k5.metric('Fornecedores', n_fornecedores)
+        k6.metric('Pedidos', n_pedidos)
+        k7.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
+        k8.metric('MRR Gerado', fmt_brl(mrr_gerado))
+
+        st.markdown('<br>', unsafe_allow_html=True)
+
+        # ── Pedidos do período ────────────────────────────────────────────────────
+        st.markdown('##### Pedidos do Período')
+        cols_pedidos = ['DATA DA COMPRA', 'FORNECEDOR', 'PRODUTO', 'FILIAL',
+                        'QUANTIDADE COMPRADA', 'PREÇO UNITÁRIO', 'PREÇO TOTAL', 'FORMA DE PAGAMENTO']
+        cols_pedidos = [c for c in cols_pedidos if c in df_f.columns]
+        df_ped = df_f[cols_pedidos].copy()
+        if 'DATA DA COMPRA' in df_ped.columns:
+            df_ped['DATA DA COMPRA'] = pd.to_datetime(df_ped['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
+        for col in ['PREÇO UNITÁRIO', 'PREÇO TOTAL']:
+            if col in df_ped.columns:
+                df_ped[col] = df_ped[col].apply(fmt_brl)
+        df_ped = df_ped.sort_values('DATA DA COMPRA', ascending=False) if 'DATA DA COMPRA' in df_ped.columns else df_ped
+        st.dataframe(df_ped, use_container_width=True, hide_index=True)
+
+        st.markdown('<br>', unsafe_allow_html=True)
+
+        # ── Histórico de compras por mês (sem filtro, a partir de nov/25) ─────────
+        if 'ANO_MES' in df.columns:
+            st.markdown('##### Histórico de Compras')
+            df_hist_geral = df[df['ANO_MES'] >= '2025-11'].copy()
+
+            # Calcula MRR por item recebido (usa quantidade recebida × ticket médio)
+            if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_hist_geral.columns:
+                mrr_prods_h  = df_mrr_vg['produto'].tolist()
+                mrr_map_h    = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+                norm_lista_h = [_normalizar(p) for p in mrr_prods_h]
+
+                def ticket_hist(nome):
+                    norm = _normalizar(nome)
+                    if norm in norm_lista_h:
+                        return mrr_map_h[mrr_prods_h[norm_lista_h.index(norm)]]
+                    m = difflib.get_close_matches(norm, norm_lista_h, n=1, cutoff=0.5)
+                    return mrr_map_h[mrr_prods_h[norm_lista_h.index(m[0])]] if m else 0.0
+
+                qtd_col_h = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_hist_geral.columns else 'QUANTIDADE COMPRADA'
+                df_hist_geral['_mrr'] = df_hist_geral.apply(
+                    lambda r: ticket_hist(r['PRODUTO']) * r[qtd_col_h]
+                    if pd.notna(r[qtd_col_h]) and r[qtd_col_h] > 0 else 0.0, axis=1
+                )
+            else:
+                df_hist_geral['_mrr'] = 0.0
+
+            hist = (
+                df_hist_geral.groupby('ANO_MES')
+                .agg(
+                    Quantidade=('QUANTIDADE COMPRADA', 'sum'),
+                    Custo_Total=('PREÇO TOTAL', 'sum'),
+                    Pedidos=('ANO_MES', 'count'),
+                    MRR_Total=('_mrr', 'sum'),
+                )
+                .reset_index()
+                .sort_values('ANO_MES', ascending=False)
+            )
+            hist['Custo Total'] = hist['Custo_Total'].apply(fmt_brl)
+            hist['MRR Gerado']  = hist['MRR_Total'].apply(fmt_brl)
+            hist['Quantidade']  = hist['Quantidade'].apply(lambda x: f'{int(x):,}'.replace(',', '.'))
+            hist = hist.rename(columns={'ANO_MES': 'Mês', 'Pedidos': 'Nº Pedidos'})
+            hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total', 'MRR Gerado']]
+            st.dataframe(hist, use_container_width=True, hide_index=True)
+
+    else:
+        # ── Visão Recebimentos ────────────────────────────────────────────────
+        df_recebidos = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else pd.DataFrame()
+
+        # MRR gerado (recebimentos)
+        try:
+            df_mrr_vg = load_mrr_data()
+        except Exception:
+            df_mrr_vg = pd.DataFrame()
+
+        mrr_gerado_rec = 0.0
+        if not df_recebidos.empty and not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_recebidos.columns:
+            mrr_prods_vg = df_mrr_vg['produto'].tolist()
+            mrr_map_vg   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+
+            def buscar_ticket_rec(nome):
+                norm = _normalizar(nome)
+                for p in mrr_prods_vg:
+                    if _normalizar(p) == norm:
+                        return mrr_map_vg[p]
+                norm_lista = [_normalizar(p) for p in mrr_prods_vg]
+                matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
+                if matches:
+                    return mrr_map_vg[mrr_prods_vg[norm_lista.index(matches[0])]]
+                return 0.0
+
+            qtd_col_r = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
+            mrr_gerado_rec = df_recebidos.apply(
+                lambda r: buscar_ticket_rec(r['PRODUTO']) * r[qtd_col_r], axis=1
+            ).sum()
+
+        qtd_recebida_r = int(df_recebidos['QUANTIDADE RECEBIDA'].sum()) if not df_recebidos.empty and 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 0
+        n_forn_rec     = df_recebidos['FORNECEDOR'].nunique() if not df_recebidos.empty and 'FORNECEDOR' in df_recebidos.columns else 0
+        n_ped_rec      = len(df_recebidos)
+
+        kr1, kr2, kr3, kr4 = st.columns(4)
+        kr1.metric('Qtd Recebida', f'{qtd_recebida_r:,}'.replace(',', '.'))
+        kr2.metric('MRR Gerado', fmt_brl(mrr_gerado_rec))
+        kr3.metric('Fornecedores', n_forn_rec)
+        kr4.metric('Nº Pedidos Recebidos', n_ped_rec)
+
+        st.markdown('<br>', unsafe_allow_html=True)
+
+        if df_recebidos.empty:
             st.info('Nenhum item recebido no período selecionado.')
         else:
-            for chunk_start in range(0, len(recebidos_prod), 4):
-                chunk = recebidos_prod.iloc[chunk_start:chunk_start + 4]
-                render_cards(chunk)
-                if chunk_start + 4 < len(recebidos_prod):
-                    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+            # Cards por produto
+            if 'PRODUTO' in df_recebidos.columns and 'QUANTIDADE RECEBIDA' in df_recebidos.columns:
+                st.markdown('##### Itens Recebidos no Período')
+                qtd_col_rec = 'QUANTIDADE RECEBIDA'
+                recebidos_prod = (
+                    df_recebidos.groupby(['PRODUTO', 'FORNECEDOR'])
+                    .agg(qtd=(qtd_col_rec, 'sum'), valor=('PREÇO TOTAL', 'sum'))
+                    .reset_index()
+                    .sort_values('qtd', ascending=False)
+                )
 
-    st.markdown('<br>', unsafe_allow_html=True)
+                if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns:
+                    mrr_prods_vg2 = df_mrr_vg['produto'].tolist()
+                    mrr_map_vg2   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+                    def ticket_rec(nome):
+                        norm = _normalizar(nome)
+                        for p in mrr_prods_vg2:
+                            if _normalizar(p) == norm:
+                                return mrr_map_vg2[p]
+                        nl = [_normalizar(p) for p in mrr_prods_vg2]
+                        m  = difflib.get_close_matches(norm, nl, n=1, cutoff=0.5)
+                        return mrr_map_vg2[mrr_prods_vg2[nl.index(m[0])]] if m else 0.0
+                    recebidos_prod['ticket'] = recebidos_prod['PRODUTO'].apply(ticket_rec)
+                    recebidos_prod['mrr']    = recebidos_prod['ticket'] * recebidos_prod['qtd']
+                else:
+                    recebidos_prod['ticket'] = 0.0
+                    recebidos_prod['mrr']    = 0.0
 
-    # ── Histórico de compras por mês (sem filtro, a partir de nov/25) ─────────
-    if 'ANO_MES' in df.columns:
-        st.markdown('##### Histórico de Compras')
-        df_hist_geral = df[df['ANO_MES'] >= '2025-11'].copy()
+                def render_cards(df_cards):
+                    cols_c = st.columns(min(len(df_cards), 4))
+                    for i, (_, row) in enumerate(df_cards.iterrows()):
+                        with cols_c[i % 4]:
+                            nome    = str(row['PRODUTO'])[:40]
+                            forn    = str(row['FORNECEDOR'])[:30]
+                            qtd_fmt = f'{int(row["qtd"]):,}'.replace(',', '.')
+                            mrr_str = fmt_brl(row['mrr']) if row['mrr'] > 0 else '-'
+                            st.markdown(f"""
+                            <div class="produto-card">
+                                <div class="prod-nome" title="{row['PRODUTO']}">{nome}</div>
+                                <div class="prod-forn">{forn}</div>
+                                <div class="prod-qtd">{qtd_fmt}</div>
+                                <div class="prod-qtd-label">unidades recebidas</div>
+                                <div class="prod-valor">MRR: {mrr_str}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-        # Calcula MRR por item recebido (usa quantidade recebida × ticket médio)
-        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_hist_geral.columns:
-            mrr_prods_h  = df_mrr_vg['produto'].tolist()
-            mrr_map_h    = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
-            norm_lista_h = [_normalizar(p) for p in mrr_prods_h]
+                for chunk_start in range(0, len(recebidos_prod), 4):
+                    chunk = recebidos_prod.iloc[chunk_start:chunk_start + 4]
+                    render_cards(chunk)
+                    if chunk_start + 4 < len(recebidos_prod):
+                        st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
 
-            def ticket_hist(nome):
-                norm = _normalizar(nome)
-                if norm in norm_lista_h:
-                    return mrr_map_h[mrr_prods_h[norm_lista_h.index(norm)]]
-                m = difflib.get_close_matches(norm, norm_lista_h, n=1, cutoff=0.5)
-                return mrr_map_h[mrr_prods_h[norm_lista_h.index(m[0])]] if m else 0.0
+            st.markdown('<br>', unsafe_allow_html=True)
 
-            qtd_col_h = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_hist_geral.columns else 'QUANTIDADE COMPRADA'
-            df_hist_geral['_mrr'] = df_hist_geral.apply(
-                lambda r: ticket_hist(r['PRODUTO']) * r[qtd_col_h]
-                if pd.notna(r[qtd_col_h]) and r[qtd_col_h] > 0 else 0.0, axis=1
-            )
-        else:
-            df_hist_geral['_mrr'] = 0.0
-
-        hist = (
-            df_hist_geral.groupby('ANO_MES')
-            .agg(
-                Quantidade=('QUANTIDADE COMPRADA', 'sum'),
-                Custo_Total=('PREÇO TOTAL', 'sum'),
-                Pedidos=('ANO_MES', 'count'),
-                MRR_Total=('_mrr', 'sum'),
-            )
-            .reset_index()
-            .sort_values('ANO_MES', ascending=False)
-        )
-        hist['Custo Total'] = hist['Custo_Total'].apply(fmt_brl)
-        hist['MRR Gerado']  = hist['MRR_Total'].apply(fmt_brl)
-        hist['Quantidade']  = hist['Quantidade'].apply(lambda x: f'{int(x):,}'.replace(',', '.'))
-        hist = hist.rename(columns={'ANO_MES': 'Mês', 'Pedidos': 'Nº Pedidos'})
-        hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total', 'MRR Gerado']]
-        st.dataframe(hist, use_container_width=True, hide_index=True)
-
-    st.markdown('<br>', unsafe_allow_html=True)
-
-    # ── Pedidos do período ────────────────────────────────────────────────────
-    st.markdown('##### Pedidos do Período')
-    cols_pedidos = ['DATA DA COMPRA', 'FORNECEDOR', 'PRODUTO', 'FILIAL',
-                    'QUANTIDADE COMPRADA', 'PREÇO UNITÁRIO', 'PREÇO TOTAL', 'FORMA DE PAGAMENTO']
-    cols_pedidos = [c for c in cols_pedidos if c in df_f.columns]
-    df_ped = df_f[cols_pedidos].copy()
-    if 'DATA DA COMPRA' in df_ped.columns:
-        df_ped['DATA DA COMPRA'] = pd.to_datetime(df_ped['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
-    for col in ['PREÇO UNITÁRIO', 'PREÇO TOTAL']:
-        if col in df_ped.columns:
-            df_ped[col] = df_ped[col].apply(fmt_brl)
-    df_ped = df_ped.sort_values('DATA DA COMPRA', ascending=False) if 'DATA DA COMPRA' in df_ped.columns else df_ped
-    st.dataframe(df_ped, use_container_width=True, hide_index=True)
+            # Tabela de itens recebidos
+            st.markdown('##### Detalhamento de Recebimentos')
+            cols_rec = ['DATA DE RECEBIMENTO', 'PRODUTO', 'FORNECEDOR', 'FILIAL', 'QUANTIDADE RECEBIDA', 'PREÇO TOTAL']
+            cols_rec = [c for c in cols_rec if c in df_recebidos.columns]
+            df_rec_show = df_recebidos[cols_rec].copy()
+            if 'DATA DE RECEBIMENTO' in df_rec_show.columns:
+                df_rec_show['DATA DE RECEBIMENTO'] = pd.to_datetime(df_rec_show['DATA DE RECEBIMENTO'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
+            if 'PREÇO TOTAL' in df_rec_show.columns:
+                df_rec_show['PREÇO TOTAL'] = df_rec_show['PREÇO TOTAL'].apply(fmt_brl)
+            df_rec_show = df_rec_show.sort_values('DATA DE RECEBIMENTO', ascending=False) if 'DATA DE RECEBIMENTO' in df_rec_show.columns else df_rec_show
+            st.dataframe(df_rec_show, use_container_width=True, hide_index=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 2 — LOGÍSTICA
 # ══════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.markdown('### Produtos a Chegar')
+    st.markdown('### Pedidos em Aberto')
 
     hoje = pd.Timestamp.today().normalize()
 
-    if 'DATA DE RECEBIMENTO' not in df_f.columns:
+    # Filtros internos da logística
+    log_c1, log_c2 = st.columns(2)
+    with log_c1:
+        log_forn = st.multiselect('Fornecedor', sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else [], default=[], placeholder='Todos', key='log_forn')
+    with log_c2:
+        log_filial = st.multiselect('Filial', sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else [], default=[], placeholder='Todos', key='log_filial')
+
+    if 'DATA DE RECEBIMENTO' not in df.columns:
         st.info('Coluna "DATA DE RECEBIMENTO" não encontrada na planilha.')
     else:
-        # Pendentes = quantidade recebida vazia ou zero
-        pendentes = df_f[
-            df_f['QUANTIDADE RECEBIDA'].isna() | (df_f['QUANTIDADE RECEBIDA'] == 0)
-        ].copy() if 'QUANTIDADE RECEBIDA' in df_f.columns else df_f[df_f['DATA DE RECEBIMENTO'].isna()].copy()
+        # Pendentes = sem data de recebimento (pedidos em aberto)
+        pendentes = df[df['DATA DE RECEBIMENTO'].isna()].copy()
+        if log_forn:
+            pendentes = pendentes[pendentes['FORNECEDOR'].isin(log_forn)]
+        if log_filial:
+            pendentes = pendentes[pendentes['FILIAL'].isin(log_filial)]
 
         # Lead time médio: apenas itens recebidos do histórico completo
         df_hist_recebidos = df[df['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df.columns else df
@@ -964,13 +1009,40 @@ with tab4:
 # ══════════════════════════════════════════════════════════════════════════════
 with tab5:
     st.markdown('### Análises')
+    with st.expander('Filtros', expanded=False):
+        an_f1, an_f2 = st.columns(2)
+        mes_inicio_an = hoje_date.replace(day=1)
+        default_ini_an = max(mes_inicio_an, data_min) if data_min else mes_inicio_an
+        if data_min and default_ini_an > hoje_date:
+            default_ini_an = data_min
+        with an_f1:
+            an_data_inicio = st.date_input('Data início', value=default_ini_an, min_value=data_min, max_value=hoje_date, key='an_data_ini', format='DD/MM/YYYY')
+        with an_f2:
+            an_data_fim = st.date_input('Data fim', value=hoje_date, min_value=data_min, max_value=hoje_date, key='an_data_fim', format='DD/MM/YYYY')
+        an_c1, an_c2, an_c3 = st.columns(3)
+        with an_c1:
+            an_forn = st.multiselect('Fornecedor', sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else [], default=[], placeholder='Todos', key='an_forn')
+        with an_c2:
+            an_filial = st.multiselect('Filial', sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else [], default=[], placeholder='Todos', key='an_filial')
+        with an_c3:
+            an_fp = st.multiselect('Forma de Pagamento', sorted(df['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df.columns else [], default=[], placeholder='Todos', key='an_fp')
+
+    df_an = df.copy()
+    if data_min:
+        df_an = df_an[(df_an['DATA DA COMPRA'].dt.date >= an_data_inicio) & (df_an['DATA DA COMPRA'].dt.date <= an_data_fim)]
+    if an_forn:
+        df_an = df_an[df_an['FORNECEDOR'].isin(an_forn)]
+    if an_filial:
+        df_an = df_an[df_an['FILIAL'].isin(an_filial)]
+    if an_fp:
+        df_an = df_an[df_an['FORMA DE PAGAMENTO'].isin(an_fp)]
 
     col1, col2 = st.columns(2)
 
     with col1:
-        if 'FORNECEDOR' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+        if 'FORNECEDOR' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
             by_forn = (
-                df_f.groupby('FORNECEDOR')['PREÇO TOTAL']
+                df_an.groupby('FORNECEDOR')['PREÇO TOTAL']
                 .sum().reset_index()
                 .sort_values('PREÇO TOTAL', ascending=True)
                 .tail(15)
@@ -986,9 +1058,9 @@ with tab5:
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        if 'FORMA DE PAGAMENTO' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+        if 'FORMA DE PAGAMENTO' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
             by_fp = (
-                df_f[df_f['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
+                df_an[df_an['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
                 .groupby('FORMA DE PAGAMENTO')['PREÇO TOTAL']
                 .sum().reset_index()
             )
@@ -1005,9 +1077,9 @@ with tab5:
     col3, col4 = st.columns(2)
 
     with col3:
-        if 'ANO_MES' in df_f.columns and 'PREÇO TOTAL' in df_f.columns:
+        if 'ANO_MES' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
             by_mes = (
-                df_f.groupby('ANO_MES')['PREÇO TOTAL']
+                df_an.groupby('ANO_MES')['PREÇO TOTAL']
                 .sum().reset_index()
                 .sort_values('ANO_MES')
             )
@@ -1022,9 +1094,9 @@ with tab5:
             st.plotly_chart(fig3, use_container_width=True)
 
     with col4:
-        if 'FORNECEDOR' in df_f.columns and 'QUANTIDADE COMPRADA' in df_f.columns:
+        if 'FORNECEDOR' in df_an.columns and 'QUANTIDADE COMPRADA' in df_an.columns:
             by_forn_q = (
-                df_f.groupby('FORNECEDOR')['QUANTIDADE COMPRADA']
+                df_an.groupby('FORNECEDOR')['QUANTIDADE COMPRADA']
                 .sum().reset_index()
                 .sort_values('QUANTIDADE COMPRADA', ascending=True)
                 .tail(15)
@@ -1040,7 +1112,7 @@ with tab5:
             st.plotly_chart(fig4, use_container_width=True)
 
     # Lead time — somente itens recebidos
-    df_recebidos_an = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else df_f
+    df_recebidos_an = df_an[df_an['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_an.columns else df_an
     if 'FORNECEDOR' in df_recebidos_an.columns and 'LEAD TIME' in df_recebidos_an.columns:
         st.markdown('##### Lead Time Médio por Fornecedor')
         lt_forn = (
@@ -1057,3 +1129,34 @@ with tab5:
         fig5.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
                            coloraxis_showscale=False)
         st.plotly_chart(fig5, use_container_width=True)
+
+    # ── Forma de pagamento por mês ────────────────────────────────────────────
+    if 'ANO_MES' in df_an.columns and 'FORMA DE PAGAMENTO' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
+        st.markdown('##### Forma de Pagamento por Mês')
+        fp_mes = (
+            df_an[df_an['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
+            .groupby(['ANO_MES', 'FORMA DE PAGAMENTO'])['PREÇO TOTAL']
+            .sum().reset_index()
+            .sort_values('ANO_MES', ascending=False)
+        )
+        # Pivot para tabela
+        fp_pivot = fp_mes.pivot_table(index='ANO_MES', columns='FORMA DE PAGAMENTO', values='PREÇO TOTAL', aggfunc='sum', fill_value=0).reset_index()
+        fp_pivot = fp_pivot.sort_values('ANO_MES', ascending=False)
+        for col in fp_pivot.columns:
+            if col != 'ANO_MES':
+                fp_pivot[col] = fp_pivot[col].apply(lambda x: fmt_brl(x) if x > 0 else '-')
+        fp_pivot = fp_pivot.rename(columns={'ANO_MES': 'Mês'})
+        st.dataframe(fp_pivot, use_container_width=True, hide_index=True)
+
+        # Gráfico
+        fig_fp_mes = px.bar(
+            fp_mes, x='ANO_MES', y='PREÇO TOTAL', color='FORMA DE PAGAMENTO',
+            title='Volume por Forma de Pagamento e Mês',
+            labels={'ANO_MES': '', 'PREÇO TOTAL': 'Total (R$)', 'FORMA DE PAGAMENTO': ''},
+            color_discrete_sequence=CORES_GRAFICOS,
+            barmode='group',
+        )
+        fig_fp_mes.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white',
+                                  title_font_color='#1A1A1A',
+                                  legend=dict(orientation='h', yanchor='bottom', y=1.02))
+        st.plotly_chart(fig_fp_mes, use_container_width=True)
