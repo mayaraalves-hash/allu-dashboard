@@ -192,13 +192,19 @@ def load_mrr_data():
         )
     else:
         creds = Credentials.from_service_account_file(CREDS_FILE, scopes=SCOPES)
-    client    = gspread.authorize(creds)
-    planilha  = client.open_by_key(SHEET_ID)
-    # Busca a aba MRR ignorando maiúsculas/minúsculas e espaços extras
+    client   = gspread.authorize(creds)
+    planilha = client.open_by_key(SHEET_ID)
+    # Busca a aba MRR pelo gid fixo (798865343) — nova aba sempre atualizada
     ws = next(
-        (s for s in planilha.worksheets() if s.title.strip().upper() == 'MRR'),
+        (s for s in planilha.worksheets() if s.id == 798865343),
         None
     )
+    # Fallback: busca pelo título caso o gid mude
+    if ws is None:
+        ws = next(
+            (s for s in planilha.worksheets() if s.title.strip().upper() == 'MRR'),
+            None
+        )
     if ws is None:
         nomes = [s.title for s in planilha.worksheets()]
         raise ValueError(f'Aba MRR não encontrada. Abas disponíveis: {nomes}')
@@ -603,8 +609,11 @@ with tab2:
     if 'DATA DE RECEBIMENTO' not in df.columns:
         st.info('Coluna "DATA DE RECEBIMENTO" não encontrada na planilha.')
     else:
-        # Pendentes = sem data de recebimento (pedidos em aberto)
-        pendentes = df[df['DATA DE RECEBIMENTO'].isna()].copy()
+        # Pendentes = sem data de recebimento E sem quantidade recebida (pedidos em aberto)
+        mask_sem_recebimento = df['DATA DE RECEBIMENTO'].isna()
+        if 'QUANTIDADE RECEBIDA' in df.columns:
+            mask_sem_recebimento = mask_sem_recebimento & (df['QUANTIDADE RECEBIDA'].isna() | (df['QUANTIDADE RECEBIDA'] == 0))
+        pendentes = df[mask_sem_recebimento].copy()
         if log_forn:
             pendentes = pendentes[pendentes['FORNECEDOR'].isin(log_forn)]
         if log_filial:
