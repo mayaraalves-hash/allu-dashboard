@@ -324,7 +324,7 @@ hoje_date = pd.Timestamp.today().date()
 
 # ─── ABAS ─────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(['Visão Geral', 'Logística', 'Créditos em Aberto', 'Histórico de Preços', 'Análises'])
+tab1, tab2 = st.tabs(['Visão Geral', 'Logística'])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ABA 1 — VISÃO GERAL
@@ -424,11 +424,31 @@ with tab1:
                         'QUANTIDADE COMPRADA', 'PREÇO UNITÁRIO', 'PREÇO TOTAL', 'FORMA DE PAGAMENTO']
         cols_pedidos = [c for c in cols_pedidos if c in df_f.columns]
         df_ped = df_f[cols_pedidos].copy()
+
+        # MRR por linha
+        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_ped.columns:
+            _mrr_prods = df_mrr_vg['produto'].tolist()
+            _mrr_map   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+            _mrr_norms = [_normalizar(p) for p in _mrr_prods]
+            def _ticket_linha(nome):
+                n = _normalizar(nome)
+                if n in _mrr_norms:
+                    return _mrr_map[_mrr_prods[_mrr_norms.index(n)]]
+                m = difflib.get_close_matches(n, _mrr_norms, n=1, cutoff=0.5)
+                return _mrr_map[_mrr_prods[_mrr_norms.index(m[0])]] if m else 0.0
+            qtd_col_ped = 'QUANTIDADE COMPRADA'
+            df_ped['MRR'] = df_ped.apply(
+                lambda r: _ticket_linha(r['PRODUTO']) * r[qtd_col_ped]
+                if qtd_col_ped in df_ped.columns else 0.0, axis=1
+            )
+
         if 'DATA DA COMPRA' in df_ped.columns:
             df_ped['DATA DA COMPRA'] = pd.to_datetime(df_ped['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
         for col in ['PREÇO UNITÁRIO', 'PREÇO TOTAL']:
             if col in df_ped.columns:
                 df_ped[col] = df_ped[col].apply(fmt_brl)
+        if 'MRR' in df_ped.columns:
+            df_ped['MRR'] = df_ped['MRR'].apply(lambda x: fmt_brl(x) if x > 0 else '-')
         df_ped = df_ped.sort_values('DATA DA COMPRA', ascending=False) if 'DATA DA COMPRA' in df_ped.columns else df_ped
         st.dataframe(df_ped, use_container_width=True, hide_index=True)
 
@@ -479,8 +499,21 @@ with tab1:
             st.dataframe(hist, use_container_width=True, hide_index=True)
 
     else:
-        # ── Visão Recebimentos ────────────────────────────────────────────────
-        df_recebidos = df_f[df_f['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_f.columns else pd.DataFrame()
+        # ── Visão Recebimentos — filtra por DATA DE RECEBIMENTO no período ────
+        if 'DATA DE RECEBIMENTO' in df.columns:
+            df_recebidos = df[df['DATA DE RECEBIMENTO'].notna()].copy()
+            df_recebidos = df_recebidos[
+                (df_recebidos['DATA DE RECEBIMENTO'].dt.date >= vg_data_inicio) &
+                (df_recebidos['DATA DE RECEBIMENTO'].dt.date <= vg_data_fim)
+            ]
+            if vg_forn:
+                df_recebidos = df_recebidos[df_recebidos['FORNECEDOR'].isin(vg_forn)]
+            if vg_filial:
+                df_recebidos = df_recebidos[df_recebidos['FILIAL'].isin(vg_filial)]
+            if vg_fp:
+                df_recebidos = df_recebidos[df_recebidos['FORMA DE PAGAMENTO'].isin(vg_fp)]
+        else:
+            df_recebidos = pd.DataFrame()
 
         # MRR gerado (recebimentos)
         try:
@@ -806,366 +839,3 @@ with tab2:
                                    title_font_color=COR_SECUNDARIA, uniformtext_minsize=10)
             st.plotly_chart(fig_prev, use_container_width=True)
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ABA 3 — CRÉDITOS EM ABERTO
-# ══════════════════════════════════════════════════════════════════════════════
-with tab3:
-    st.markdown('### Créditos em Aberto por Fornecedor')
-
-    try:
-        df_sap = load_sap_data()
-    except Exception as e:
-        st.error(f'Erro ao carregar aba SAP_ABERTO: {e}')
-        st.stop()
-
-    # Filtra apenas Nota Fiscal de Entrada
-    col_doc = next((c for c in ['DOCUMENTO', 'TIPO', 'TIPO DE DOCUMENTO'] if c in df_sap.columns), None)
-    if col_doc:
-        df_sap = df_sap[df_sap[col_doc].astype(str).str.strip() == 'Nota Fiscal de Entrada']
-
-    # Identifica colunas — busca flexível por substring
-    col_apagar  = next((c for c in df_sap.columns if 'VENCER' in c), None)
-    col_forn    = next((c for c in df_sap.columns if c in ['FORNECEDOR', 'NOME FORNECEDOR']), None)
-    col_vencido = next((c for c in df_sap.columns if 'VENCIDO' in c or 'ATRASADO' in c), None)
-
-    if not col_apagar or not col_forn:
-        st.warning('Colunas "Fornecedor" ou "A Pagar" não encontradas na aba SAP _ABERTO.')
-    else:
-        # Parse valores numéricos (formato brasileiro: 1.234,56)
-        def parse_br(val):
-            if val is None or str(val).strip() in ('', '-', '0'):
-                return 0.0
-            s = str(val).strip().replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
-            try:
-                return float(s)
-            except Exception:
-                return 0.0
-
-        df_sap[col_apagar] = df_sap[col_apagar].apply(parse_br)
-        if col_vencido:
-            df_sap[col_vencido] = df_sap[col_vencido].apply(parse_br)
-
-        # Normaliza nomes — agrupa todas as variações da Global em um único nome
-        def normalizar_forn(nome):
-            n = str(nome).upper()
-            if 'GLOBAL DISTRIBUI' in n or 'GLOBAL DISTRIBU' in n:
-                return 'GLOBAL DISTRIBUICAO (iPlace)'
-            return nome
-        df_sap[col_forn] = df_sap[col_forn].apply(normalizar_forn)
-
-        # Agrupa por fornecedor
-        agg = {col_apagar: 'sum'}
-        if col_vencido:
-            agg[col_vencido] = 'sum'
-        creditos = df_sap.groupby(col_forn).agg(agg).reset_index()
-        creditos.columns = ['Fornecedor', 'Limite Consumido'] + (['Vencido (Atrasado)'] if col_vencido else [])
-        creditos = creditos[creditos['Limite Consumido'] > 0].sort_values('Limite Consumido', ascending=False)
-
-        # Adiciona limites aprovados e calcula saldo
-        creditos['Limite Aprovado'] = creditos['Fornecedor'].map(LIMITES)
-        creditos['Saldo Disponível'] = creditos.apply(
-            lambda r: r['Limite Aprovado'] - r['Limite Consumido']
-            if pd.notna(r['Limite Aprovado']) else None, axis=1
-        )
-
-        # ── KPIs ──────────────────────────────────────────────────────────────
-        total_consumido  = creditos['Limite Consumido'].sum()
-        total_aprovado   = creditos['Limite Aprovado'].dropna().sum()
-        total_saldo      = creditos['Saldo Disponível'].dropna().sum()
-        total_vencido    = creditos['Vencido (Atrasado)'].sum() if 'Vencido (Atrasado)' in creditos.columns else 0
-
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric('Total em Aberto', fmt_brl(total_consumido))
-        k2.metric('Limite Total Aprovado', fmt_brl(total_aprovado))
-        k3.metric('Saldo Total Disponível', fmt_brl(total_saldo))
-        k4.metric('Total Vencido', fmt_brl(total_vencido))
-
-        st.divider()
-
-        # ── Tabela ────────────────────────────────────────────────────────────
-        df_display = creditos.copy()
-        for col in ['Limite Consumido', 'Limite Aprovado', 'Saldo Disponível']:
-            if col in df_display.columns:
-                df_display[col] = df_display[col].apply(
-                    lambda x: fmt_brl(x) if pd.notna(x) and x != 0 else '-'
-                )
-        if 'Vencido (Atrasado)' in df_display.columns:
-            df_display['Vencido (Atrasado)'] = df_display['Vencido (Atrasado)'].apply(
-                lambda x: fmt_brl(x) if x > 0 else '-'
-            )
-
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-        # ── Gráfico: consumido vs aprovado ────────────────────────────────────
-        df_graf = creditos[creditos['Limite Aprovado'].notna()].copy()
-        if not df_graf.empty:
-            fig_c = go.Figure()
-            fig_c.add_trace(go.Bar(
-                name='Limite Consumido',
-                x=df_graf['Fornecedor'],
-                y=df_graf['Limite Consumido'],
-                marker_color=COR_PRIMARIA,
-            ))
-            fig_c.add_trace(go.Bar(
-                name='Saldo Disponível',
-                x=df_graf['Fornecedor'],
-                y=df_graf['Saldo Disponível'],
-                marker_color='#E0E0E0',
-            ))
-            fig_c.update_layout(
-                barmode='stack',
-                title='Limite Aprovado vs Consumido',
-                height=350,
-                plot_bgcolor='white',
-                paper_bgcolor='white',
-                title_font_color=COR_SECUNDARIA,
-                legend=dict(orientation='h', yanchor='bottom', y=1.02),
-            )
-            st.plotly_chart(fig_c, use_container_width=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ABA 4 — HISTÓRICO DE PREÇOS
-# ══════════════════════════════════════════════════════════════════════════════
-with tab4:
-    st.markdown('### Histórico de Preços por Modelo')
-
-    colunas_hist = ['PRODUTO', 'FORNECEDOR', 'DATA DA COMPRA', 'PREÇO UNITÁRIO', 'FORMA DE PAGAMENTO', 'FILIAL']
-    colunas_hist = [c for c in colunas_hist if c in df.columns]
-
-    df_hist = df[colunas_hist].copy()
-    df_hist = df_hist[df_hist['PRODUTO'].astype(str).str.strip() != '']
-
-    if 'PREÇO UNITÁRIO' in df_hist.columns:
-        df_hist = df_hist[df_hist['PREÇO UNITÁRIO'] > 0]
-
-    if 'DATA DA COMPRA' in df_hist.columns:
-        df_hist = df_hist.sort_values('DATA DA COMPRA', ascending=False)
-
-    # ── Filtros ───────────────────────────────────────────────────────────────
-    hf1, hf2 = st.columns(2)
-    with hf1:
-        produtos_lista = sorted(df_hist['PRODUTO'].dropna().unique().tolist())
-        prod_sel = st.multiselect('Produto', produtos_lista, default=[], placeholder='Todos', key='hist_prod')
-    with hf2:
-        fp_lista = sorted(df_hist['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df_hist.columns else []
-        fp_hist_sel = st.multiselect('Forma de Pagamento', fp_lista, default=[], placeholder='Todos', key='hist_fp')
-
-    if prod_sel:
-        df_hist = df_hist[df_hist['PRODUTO'].isin(prod_sel)]
-    if fp_hist_sel:
-        df_hist = df_hist[df_hist['FORMA DE PAGAMENTO'].isin(fp_hist_sel)]
-
-    # ── Resumo: último preço e variação por modelo ────────────────────────────
-    if 'PREÇO UNITÁRIO' in df_hist.columns and 'DATA DA COMPRA' in df_hist.columns:
-        df_sorted = df_hist.sort_values('DATA DA COMPRA')
-
-        # Para cada produto: linha do último preço e linha do menor preço
-        def resumo_produto(g):
-            ultima = g.iloc[-1]
-            menor  = g.loc[g['PREÇO UNITÁRIO'].idxmin()]
-            return pd.Series({
-                'Fornecedor':        ultima.get('FORNECEDOR', '-'),
-                'Ultima_Compra':     ultima.get('DATA DA COMPRA'),
-                'Ultimo_Preco':      ultima.get('PREÇO UNITÁRIO'),
-                'Ultimo_FP':         ultima.get('FORMA DE PAGAMENTO', '-'),
-                'Menor_Preco':       menor.get('PREÇO UNITÁRIO'),
-                'Menor_FP':          menor.get('FORMA DE PAGAMENTO', '-'),
-                'Menor_Data':        menor.get('DATA DA COMPRA'),
-                'Maior_Preco':       g['PREÇO UNITÁRIO'].max(),
-                'Qtd_Compras':       len(g),
-            })
-
-        ultimo_preco = (
-            df_sorted.groupby('PRODUTO')
-            .apply(resumo_produto)
-            .reset_index()
-            .sort_values('Ultima_Compra', ascending=False)
-        )
-
-        ultimo_preco['Ultima_Compra'] = pd.to_datetime(ultimo_preco['Ultima_Compra']).dt.strftime('%d/%m/%Y')
-        ultimo_preco['Menor_Data']    = pd.to_datetime(ultimo_preco['Menor_Data']).dt.strftime('%d/%m/%Y')
-        for col in ['Ultimo_Preco', 'Menor_Preco', 'Maior_Preco']:
-            ultimo_preco[col] = ultimo_preco[col].apply(fmt_brl)
-        ultimo_preco.columns = [
-            'Produto', 'Último Fornecedor', 'Última Compra',
-            'Último Preço', 'Pagamento (último)',
-            'Menor Preço', 'Pagamento (menor)', 'Data Menor Preço',
-            'Maior Preço', 'Nº Compras',
-        ]
-
-        st.markdown('##### Resumo por Modelo')
-        st.dataframe(ultimo_preco, use_container_width=True, hide_index=True)
-
-        st.markdown('##### Todas as Compras')
-
-    # ── Tabela completa ───────────────────────────────────────────────────────
-    df_hist_show = df_hist.copy()
-    if 'DATA DA COMPRA' in df_hist_show.columns:
-        df_hist_show['DATA DA COMPRA'] = pd.to_datetime(df_hist_show['DATA DA COMPRA'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('-')
-    if 'PREÇO UNITÁRIO' in df_hist_show.columns:
-        df_hist_show['PREÇO UNITÁRIO'] = df_hist_show['PREÇO UNITÁRIO'].apply(fmt_brl)
-
-    df_hist_show = df_hist_show.rename(columns={
-        'DATA DA COMPRA': 'Data da Compra',
-        'PREÇO UNITÁRIO': 'Preço Unitário',
-        'FORMA DE PAGAMENTO': 'Forma de Pagamento',
-    })
-
-    st.dataframe(df_hist_show, use_container_width=True, hide_index=True)
-
-# ══════════════════════════════════════════════════════════════════════════════
-# ABA 5 — ANÁLISES
-# ══════════════════════════════════════════════════════════════════════════════
-with tab5:
-    st.markdown('### Análises')
-    with st.expander('Filtros', expanded=False):
-        an_f1, an_f2 = st.columns(2)
-        mes_inicio_an = hoje_date.replace(day=1)
-        default_ini_an = max(mes_inicio_an, data_min) if data_min else mes_inicio_an
-        if data_min and default_ini_an > hoje_date:
-            default_ini_an = data_min
-        with an_f1:
-            an_data_inicio = st.date_input('Data início', value=default_ini_an, min_value=data_min, max_value=hoje_date, key='an_data_ini', format='DD/MM/YYYY')
-        with an_f2:
-            an_data_fim = st.date_input('Data fim', value=hoje_date, min_value=data_min, max_value=hoje_date, key='an_data_fim', format='DD/MM/YYYY')
-        an_c1, an_c2, an_c3 = st.columns(3)
-        with an_c1:
-            an_forn = st.multiselect('Fornecedor', sorted(df['FORNECEDOR'].dropna().unique().tolist()) if 'FORNECEDOR' in df.columns else [], default=[], placeholder='Todos', key='an_forn')
-        with an_c2:
-            an_filial = st.multiselect('Filial', sorted(df['FILIAL'].dropna().unique().tolist()) if 'FILIAL' in df.columns else [], default=[], placeholder='Todos', key='an_filial')
-        with an_c3:
-            an_fp = st.multiselect('Forma de Pagamento', sorted(df['FORMA DE PAGAMENTO'].dropna().unique().tolist()) if 'FORMA DE PAGAMENTO' in df.columns else [], default=[], placeholder='Todos', key='an_fp')
-
-    df_an = df.copy()
-    if data_min:
-        df_an = df_an[(df_an['DATA DA COMPRA'].dt.date >= an_data_inicio) & (df_an['DATA DA COMPRA'].dt.date <= an_data_fim)]
-    if an_forn:
-        df_an = df_an[df_an['FORNECEDOR'].isin(an_forn)]
-    if an_filial:
-        df_an = df_an[df_an['FILIAL'].isin(an_filial)]
-    if an_fp:
-        df_an = df_an[df_an['FORMA DE PAGAMENTO'].isin(an_fp)]
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if 'FORNECEDOR' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
-            by_forn = (
-                df_an.groupby('FORNECEDOR')['PREÇO TOTAL']
-                .sum().reset_index()
-                .sort_values('PREÇO TOTAL', ascending=True)
-                .tail(15)
-            )
-            fig = px.bar(
-                by_forn, x='PREÇO TOTAL', y='FORNECEDOR', orientation='h',
-                title='Volume por Fornecedor (R$)',
-                labels={'PREÇO TOTAL': 'Total (R$)', 'FORNECEDOR': ''},
-                color_discrete_sequence=[COR_PRIMARIA],
-            )
-            fig.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white',
-                              title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        if 'FORMA DE PAGAMENTO' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
-            by_fp = (
-                df_an[df_an['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
-                .groupby('FORMA DE PAGAMENTO')['PREÇO TOTAL']
-                .sum().reset_index()
-            )
-            fig2 = px.pie(
-                by_fp, values='PREÇO TOTAL', names='FORMA DE PAGAMENTO',
-                title='Volume por Forma de Pagamento',
-                color_discrete_sequence=CORES_GRAFICOS,
-                hole=0.4,
-            )
-            fig2.update_layout(height=400, paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig2, use_container_width=True)
-
-    col3, col4 = st.columns(2)
-
-    with col3:
-        if 'ANO_MES' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
-            by_mes = (
-                df_an.groupby('ANO_MES')['PREÇO TOTAL']
-                .sum().reset_index()
-                .sort_values('ANO_MES')
-            )
-            fig3 = px.bar(
-                by_mes, x='ANO_MES', y='PREÇO TOTAL',
-                title='Volume Mensal (R$)',
-                labels={'ANO_MES': '', 'PREÇO TOTAL': 'Total (R$)'},
-                color_discrete_sequence=[COR_PRIMARIA],
-            )
-            fig3.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig3, use_container_width=True)
-
-    with col4:
-        if 'FORNECEDOR' in df_an.columns and 'QUANTIDADE COMPRADA' in df_an.columns:
-            by_forn_q = (
-                df_an.groupby('FORNECEDOR')['QUANTIDADE COMPRADA']
-                .sum().reset_index()
-                .sort_values('QUANTIDADE COMPRADA', ascending=True)
-                .tail(15)
-            )
-            fig4 = px.bar(
-                by_forn_q, x='QUANTIDADE COMPRADA', y='FORNECEDOR', orientation='h',
-                title='Quantidade Comprada por Fornecedor',
-                labels={'QUANTIDADE COMPRADA': 'Qtd', 'FORNECEDOR': ''},
-                color_discrete_sequence=[COR_ACENTO],
-            )
-            fig4.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                               title_font_color=COR_SECUNDARIA)
-            st.plotly_chart(fig4, use_container_width=True)
-
-    # Lead time — somente itens recebidos
-    df_recebidos_an = df_an[df_an['DATA DE RECEBIMENTO'].notna()] if 'DATA DE RECEBIMENTO' in df_an.columns else df_an
-    if 'FORNECEDOR' in df_recebidos_an.columns and 'LEAD TIME' in df_recebidos_an.columns:
-        st.markdown('##### Lead Time Médio por Fornecedor')
-        lt_forn = (
-            df_recebidos_an.groupby('FORNECEDOR')['LEAD TIME']
-            .mean().dropna().round(1).reset_index()
-            .sort_values('LEAD TIME', ascending=False)
-        )
-        lt_forn.columns = ['Fornecedor', 'Lead Time Médio (dias)']
-        fig5 = px.bar(
-            lt_forn, x='Fornecedor', y='Lead Time Médio (dias)',
-            color='Lead Time Médio (dias)',
-            color_continuous_scale=['#00C853', '#69F0AE', '#FFB347', '#D32F2F'],
-        )
-        fig5.update_layout(height=350, plot_bgcolor='white', paper_bgcolor='white',
-                           coloraxis_showscale=False)
-        st.plotly_chart(fig5, use_container_width=True)
-
-    # ── Forma de pagamento por mês ────────────────────────────────────────────
-    if 'ANO_MES' in df_an.columns and 'FORMA DE PAGAMENTO' in df_an.columns and 'PREÇO TOTAL' in df_an.columns:
-        st.markdown('##### Forma de Pagamento por Mês')
-        fp_mes = (
-            df_an[df_an['FORMA DE PAGAMENTO'].astype(str).str.strip() != '']
-            .groupby(['ANO_MES', 'FORMA DE PAGAMENTO'])['PREÇO TOTAL']
-            .sum().reset_index()
-            .sort_values('ANO_MES', ascending=False)
-        )
-        # Pivot para tabela
-        fp_pivot = fp_mes.pivot_table(index='ANO_MES', columns='FORMA DE PAGAMENTO', values='PREÇO TOTAL', aggfunc='sum', fill_value=0).reset_index()
-        fp_pivot = fp_pivot.sort_values('ANO_MES', ascending=False)
-        for col in fp_pivot.columns:
-            if col != 'ANO_MES':
-                fp_pivot[col] = fp_pivot[col].apply(lambda x: fmt_brl(x) if x > 0 else '-')
-        fp_pivot = fp_pivot.rename(columns={'ANO_MES': 'Mês'})
-        st.dataframe(fp_pivot, use_container_width=True, hide_index=True)
-
-        # Gráfico
-        fig_fp_mes = px.bar(
-            fp_mes, x='ANO_MES', y='PREÇO TOTAL', color='FORMA DE PAGAMENTO',
-            title='Volume por Forma de Pagamento e Mês',
-            labels={'ANO_MES': '', 'PREÇO TOTAL': 'Total (R$)', 'FORMA DE PAGAMENTO': ''},
-            color_discrete_sequence=CORES_GRAFICOS,
-            barmode='group',
-        )
-        fig_fp_mes.update_layout(height=400, plot_bgcolor='white', paper_bgcolor='white',
-                                  title_font_color='#1A1A1A',
-                                  legend=dict(orientation='h', yanchor='bottom', y=1.02))
-        st.plotly_chart(fig_fp_mes, use_container_width=True)
