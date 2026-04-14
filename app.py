@@ -374,32 +374,40 @@ with tab1:
         lead_medio     = df_recebidos['LEAD TIME'].mean() if 'LEAD TIME' in df_recebidos.columns else None
         n_pedidos      = len(df_f)
 
-        # MRR gerado: itens já recebidos, cruzados com ticket médio da aba MRR
+        # MRR: carrega tickets
         try:
             df_mrr_vg = load_mrr_data()
         except Exception:
             df_mrr_vg = pd.DataFrame()
 
-        mrr_gerado = 0.0
-        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns and 'PRODUTO' in df_recebidos.columns:
-            mrr_prods_vg = df_mrr_vg['produto'].tolist()
-            mrr_map_vg   = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+        def _buscar_ticket(nome, prods, mapa):
+            norm = _normalizar(nome)
+            norms = [_normalizar(p) for p in prods]
+            if norm in norms:
+                return mapa[prods[norms.index(norm)]]
+            m = difflib.get_close_matches(norm, norms, n=1, cutoff=0.5)
+            return mapa[prods[norms.index(m[0])]] if m else 0.0
 
-            def buscar_ticket_vg(nome):
-                norm = _normalizar(nome)
-                for p in mrr_prods_vg:
-                    if _normalizar(p) == norm:
-                        return mrr_map_vg[p]
-                norm_lista = [_normalizar(p) for p in mrr_prods_vg]
-                matches = difflib.get_close_matches(norm, norm_lista, n=1, cutoff=0.5)
-                if matches:
-                    return mrr_map_vg[mrr_prods_vg[norm_lista.index(matches[0])]]
-                return 0.0
+        mrr_realizado = 0.0
+        mrr_previsto  = 0.0
 
-            qtd_col = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
-            mrr_gerado = df_recebidos.apply(
-                lambda r: buscar_ticket_vg(r['PRODUTO']) * r[qtd_col], axis=1
-            ).sum()
+        if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns:
+            _prods = df_mrr_vg['produto'].tolist()
+            _mapa  = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+
+            # MRR Realizado: compras do período já recebidas (DATA DE RECEBIMENTO preenchida)
+            if 'PRODUTO' in df_recebidos.columns:
+                qtd_col = 'QUANTIDADE RECEBIDA' if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 'QUANTIDADE COMPRADA'
+                mrr_realizado = df_recebidos.apply(
+                    lambda r: _buscar_ticket(r['PRODUTO'], _prods, _mapa) * r[qtd_col], axis=1
+                ).sum()
+
+            # MRR Previsto: compras do período ainda em trânsito (sem data de recebimento)
+            df_transit = df_f[df_f['DATA DE RECEBIMENTO'].isna()] if 'DATA DE RECEBIMENTO' in df_f.columns else pd.DataFrame()
+            if not df_transit.empty and 'PRODUTO' in df_transit.columns and 'QUANTIDADE COMPRADA' in df_transit.columns:
+                mrr_previsto = df_transit.apply(
+                    lambda r: _buscar_ticket(r['PRODUTO'], _prods, _mapa) * r['QUANTIDADE COMPRADA'], axis=1
+                ).sum()
 
         qtd_recebida = int(df_recebidos['QUANTIDADE RECEBIDA'].sum()) if 'QUANTIDADE RECEBIDA' in df_recebidos.columns else 0
         qtd_pendente = int(total_qtd) - qtd_recebida
@@ -413,8 +421,8 @@ with tab1:
         k5, k6, k7, k8 = st.columns(4)
         k5.metric('Fornecedores', n_fornecedores)
         k6.metric('Pedidos', n_pedidos)
-        k7.metric('Lead Time Médio', f'{lead_medio:.1f} dias' if lead_medio and not pd.isna(lead_medio) else 'N/A')
-        k8.metric('MRR Gerado', fmt_brl(mrr_gerado))
+        k7.metric('MRR Realizado', fmt_brl(mrr_realizado))
+        k8.metric('MRR Previsto', fmt_brl(mrr_previsto))
 
         st.markdown('<br>', unsafe_allow_html=True)
 
