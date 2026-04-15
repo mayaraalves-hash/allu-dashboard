@@ -511,36 +511,69 @@ with tab1:
         # ── Resumo por produto × mês ──────────────────────────────────────────
         if 'PRODUTO' in df.columns and 'ANO_MES' in df.columns and 'QUANTIDADE COMPRADA' in df.columns:
             st.markdown('##### Volume de Compras por Produto e Mês')
-            df_resumo = df[df['ANO_MES'] >= '2025-11'].copy()
+            df_resumo = df[df['ANO_MES'] >= '2026-01'].copy()
 
-            pivot = (
-                df_resumo.groupby(['PRODUTO', 'ANO_MES'])['QUANTIDADE COMPRADA']
-                .sum()
-                .reset_index()
-                .pivot_table(index='PRODUTO', columns='ANO_MES', values='QUANTIDADE COMPRADA', aggfunc='sum', fill_value=0)
-            )
-            pivot.columns.name = None
-            pivot = pivot.reset_index()
-
-            # Renomeia colunas de mês para formato legível (2025-11 → Nov/25)
             def fmt_mes(m):
                 try:
                     return pd.Period(m, 'M').strftime('%b/%y').capitalize()
                 except Exception:
                     return m
-            pivot = pivot.rename(columns={c: fmt_mes(c) for c in pivot.columns if c != 'PRODUTO'})
 
-            # Adiciona coluna Total
-            mes_cols = [c for c in pivot.columns if c != 'PRODUTO']
-            pivot['Total'] = pivot[mes_cols].sum(axis=1)
-            pivot = pivot.sort_values('Total', ascending=False)
+            # ── Pivot Quantidade ──────────────────────────────────────────────
+            piv_qtd = (
+                df_resumo.groupby(['PRODUTO', 'ANO_MES'])['QUANTIDADE COMPRADA']
+                .sum().reset_index()
+                .pivot_table(index='PRODUTO', columns='ANO_MES', values='QUANTIDADE COMPRADA', aggfunc='sum', fill_value=0)
+            )
+            piv_qtd.columns.name = None
+            piv_qtd = piv_qtd.reset_index()
+            mes_cols_raw = [c for c in piv_qtd.columns if c != 'PRODUTO']
+            piv_qtd['_total_qtd'] = piv_qtd[mes_cols_raw].sum(axis=1)
+            piv_qtd = piv_qtd.sort_values('_total_qtd', ascending=False)
 
-            # Formata números
-            for c in mes_cols + ['Total']:
-                pivot[c] = pivot[c].apply(lambda x: f'{int(x):,}'.replace(',', '.') if x > 0 else '-')
+            # ── Pivot Valor (R$) ──────────────────────────────────────────────
+            piv_val = (
+                df_resumo.groupby(['PRODUTO', 'ANO_MES'])['PREÇO TOTAL']
+                .sum().reset_index()
+                .pivot_table(index='PRODUTO', columns='ANO_MES', values='PREÇO TOTAL', aggfunc='sum', fill_value=0)
+            ) if 'PREÇO TOTAL' in df_resumo.columns else None
+            if piv_val is not None:
+                piv_val.columns.name = None
+                piv_val = piv_val.reset_index()
 
-            pivot = pivot.rename(columns={'PRODUTO': 'Produto'})
-            st.dataframe(pivot, use_container_width=True, hide_index=True)
+            # ── Ticket Médio do MRR por produto ──────────────────────────────
+            ticket_map = {}
+            if not df_mrr_vg.empty and 'produto' in df_mrr_vg.columns:
+                _p = df_mrr_vg['produto'].tolist()
+                _m = df_mrr_vg.set_index('produto')['valor_mensal'].to_dict()
+                _n = [_normalizar(x) for x in _p]
+                for prod in piv_qtd['PRODUTO']:
+                    ticket_map[prod] = _buscar_ticket(prod, _p, _m)
+
+            # ── Monta tabela final ────────────────────────────────────────────
+            ordem = piv_qtd['PRODUTO'].tolist()
+            rows = []
+            for prod in ordem:
+                row = {'Produto': prod}
+                qtd_row = piv_qtd[piv_qtd['PRODUTO'] == prod].iloc[0]
+                val_row = piv_val[piv_val['PRODUTO'] == prod].iloc[0] if piv_val is not None else None
+
+                for mc in mes_cols_raw:
+                    label = fmt_mes(mc)
+                    qtd = int(qtd_row.get(mc, 0))
+                    val = val_row[mc] if val_row is not None else 0
+                    row[label] = f'{qtd:,}'.replace(',', '.') if qtd > 0 else '-'
+                    row[f'{label} (R$)'] = fmt_brl(val) if val > 0 else '-'
+
+                total_qtd = int(qtd_row['_total_qtd'])
+                total_val = sum(val_row[mc] for mc in mes_cols_raw if mc in val_row) if val_row is not None else 0
+                row['Total Qtd'] = f'{total_qtd:,}'.replace(',', '.')
+                row['Total R$']  = fmt_brl(total_val) if total_val > 0 else '-'
+                row['Ticket Médio MRR'] = fmt_brl(ticket_map.get(prod, 0)) if ticket_map.get(prod, 0) > 0 else '-'
+                rows.append(row)
+
+            df_pivot_final = pd.DataFrame(rows)
+            st.dataframe(df_pivot_final, use_container_width=True, hide_index=True)
 
     else:
         # ── Visão Recebimentos — filtra por DATA DE RECEBIMENTO no período ────
