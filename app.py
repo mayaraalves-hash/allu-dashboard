@@ -506,6 +506,42 @@ with tab1:
             hist = hist[['Mês', 'Nº Pedidos', 'Quantidade', 'Custo Total', 'MRR Gerado']]
             st.dataframe(hist, use_container_width=True, hide_index=True)
 
+        st.markdown('<br>', unsafe_allow_html=True)
+
+        # ── Resumo por produto × mês ──────────────────────────────────────────
+        if 'PRODUTO' in df.columns and 'ANO_MES' in df.columns and 'QUANTIDADE COMPRADA' in df.columns:
+            st.markdown('##### Volume de Compras por Produto e Mês')
+            df_resumo = df[df['ANO_MES'] >= '2025-11'].copy()
+
+            pivot = (
+                df_resumo.groupby(['PRODUTO', 'ANO_MES'])['QUANTIDADE COMPRADA']
+                .sum()
+                .reset_index()
+                .pivot_table(index='PRODUTO', columns='ANO_MES', values='QUANTIDADE COMPRADA', aggfunc='sum', fill_value=0)
+            )
+            pivot.columns.name = None
+            pivot = pivot.reset_index()
+
+            # Renomeia colunas de mês para formato legível (2025-11 → Nov/25)
+            def fmt_mes(m):
+                try:
+                    return pd.Period(m, 'M').strftime('%b/%y').capitalize()
+                except Exception:
+                    return m
+            pivot = pivot.rename(columns={c: fmt_mes(c) for c in pivot.columns if c != 'PRODUTO'})
+
+            # Adiciona coluna Total
+            mes_cols = [c for c in pivot.columns if c != 'PRODUTO']
+            pivot['Total'] = pivot[mes_cols].sum(axis=1)
+            pivot = pivot.sort_values('Total', ascending=False)
+
+            # Formata números
+            for c in mes_cols + ['Total']:
+                pivot[c] = pivot[c].apply(lambda x: f'{int(x):,}'.replace(',', '.') if x > 0 else '-')
+
+            pivot = pivot.rename(columns={'PRODUTO': 'Produto'})
+            st.dataframe(pivot, use_container_width=True, hide_index=True)
+
     else:
         # ── Visão Recebimentos — filtra por DATA DE RECEBIMENTO no período ────
         if 'DATA DE RECEBIMENTO' in df.columns:
